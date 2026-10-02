@@ -1,6 +1,6 @@
 # HUD Bluetooth protocol (as far as known)
 
-Interoperability notes for the Bluetooth LE head-up display sold as *Tilsberk / DVision*. The values were determined by observing the radio traffic and are checked against reference captures in `HudProtocolTest`. No vendor code or assets are part of this repository. Everything here is **unofficial and may be incomplete or wrong**; "unverified" marks what has not been seen working on a device.
+Interoperability notes for the Bluetooth LE head-up display sold as *Tilsberk / DVision*. The values were determined solely for interoperability, by observing the radio traffic (captures) and by examining the vendor's app to understand the message formats, and are checked against reference captures in `HudProtocolTest`. No vendor code or assets are part of this repository. Everything here is **unofficial and may be incomplete or wrong**; "unverified" marks what has not been seen working on a device.
 
 Reference implementation: `protocol/HudProtocol.kt`, `protocol/NavCommand.kt`, `protocol/DisplayMode.kt`, `ble/HudClient.kt`.
 
