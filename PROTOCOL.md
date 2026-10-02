@@ -83,8 +83,13 @@ Direction bits: straight 1, slightly right 2, right 4, sharp right 8, U-turn lef
 | `2: {1: screen, 2: packed hide list, 3: packed show list}` | show/hide display elements of a screen |
 | `5: {1: screen}` | activate screen |
 | `10: {1: {2: 2}}` | automatic brightness on |
+| `10: {1: {1: level, 2: 1}}` | manual brightness, level 1 / 2 / 3 = dark / medium / bright (verified on the HUD) |
 
-Connect sequence used: navigation finished → read configuration → clock + show/hide for the chosen screen → activate screen → automatic brightness. After that only changed fields are sent.
+**Alignment mode (Justage):** activating screen 1 (`5: {1: 1}`) shows the HUD's alignment picture. To leave it: read configuration, show/hide for the chosen screen, activate that screen.
+
+**Speed warning:** the HUD has no tolerance setting of its own. Field 3 sub-field 2 ("speed ok") decides: 0 draws speed and limit bold. The app sets it to 0 when speed > limit + tolerance (0–30 km/h), and always to 1 when the warning is switched off.
+
+Connect sequence used: navigation finished → read configuration → clock + show/hide for the chosen screen → activate screen → brightness (automatic or the chosen manual level). After that only changed fields are sent.
 
 ## Screens and elements
 
@@ -95,4 +100,4 @@ Call/message events (fields 21/22) are only visible in Explorer and City; the ca
 ## Not known / unverified
 - Whether arrows 11–14 (goal left/right, sharp left/right) are drawn.
 - Behaviour with other firmware versions and other HUD models.
-- Lane display for navigation apps (OsmAnd provides no lane data).
+- Lane display for navigation apps (OSMAnd provides no lane data).

@@ -1,22 +1,22 @@
-# OsmAnd HUD Bridge
+# OSMAnd HUD Bridge
 
 [English version](README.md)
 
-Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-LE-Head-up-Display (*Tilsberk / DVision* für Motorradhelme) direkt an, gespeist von den Navigationsdaten von [OsmAnd](https://osmand.net). Kein Herstellerkonto, keine Hersteller-App und kein Server nötig.
+Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-LE-Head-up-Display (*Tilsberk / DVision* für Motorradhelme) direkt an, gespeist von den Navigationsdaten von [OSMAnd](https://osmand.net). Kein Herstellerkonto, keine Hersteller-App und kein Server nötig.
 
-> **Keine Verbindung** zu Tilsberk, Digades oder OsmAnd. Alle Produktnamen und Marken gehören ihren Inhabern und dienen nur der Beschreibung der Kompatibilität. **Keine Gewähr.** Die Anzeige kann ausfallen oder falsch sein. Verlass dich beim Fahren nicht darauf, Verkehrsschilder und -regeln haben Vorrang. Nutzung auf eigene Gefahr.
+> **Keine Verbindung** zu Tilsberk, Digades oder OSMAnd. Alle Produktnamen und Marken gehören ihren Inhabern und dienen nur der Beschreibung der Kompatibilität. **Keine Gewähr.** Die Anzeige kann ausfallen oder falsch sein. Verlass dich beim Fahren nicht darauf, Verkehrsschilder und -regeln haben Vorrang. Nutzung auf eigene Gefahr.
 
 ## Was die App tut
 - Zeigt am HUD Tempo, Tempolimit (aus OpenStreetMap), Abbiegepfeil und Entfernung, Restweg, Restzeit und Ankunft, nächste und aktuelle Straße, Kompass sowie eingehende Anrufe und WhatsApp-Nachrichten.
 - Vier Anzeigemodi (Navigator, Minimalist, Explorer, City), in der App wählbar und gespeichert.
 - Läuft als Vordergrunddienst auch bei ausgeschaltetem Display, verbindet sich selbst neu und zeigt lieber nichts als etwas Falsches.
-- Navigationsdaten: OsmAnd-Schnittstelle (Pfeil, Entfernung, Ziel erreicht, Zwischenziel) und OsmAnds Navigationsbenachrichtigung (Restweg/-zeit, Ankunft, Straße, Kreisverkehr-Ausfahrt). Ist die Schnittstelle nicht verfügbar (z. B. App in OsmAnd nicht freigegeben), kommen Pfeil und Entfernung ersatzweise aus der Benachrichtigung.
-- Tempo vom Handy-GPS, Tempolimit aus OpenStreetMap über Overpass (online, auch ohne Navigation).
+- Navigationsdaten: OSMAnd-Schnittstelle (Pfeil, Entfernung, Ziel erreicht, Zwischenziel) und OsmAnds Navigationsbenachrichtigung (Restweg/-zeit, Ankunft, Straße, Kreisverkehr-Ausfahrt). Ist die Schnittstelle nicht verfügbar (z. B. App in OSMAnd nicht freigegeben), kommen Pfeil und Entfernung ersatzweise aus der Benachrichtigung.
+- Tempo vom Handy-GPS, Tempolimit aus OpenStreetMap über Overpass (online, auch ohne Navigation; Kartenkacheln werden 180 Tage auf dem Handy gespeichert und lassen sich im WLAN bis 50 km im Umkreis vorladen; fehlende Limits lassen sich optional aus Ortsschildern und Nachbarabschnitten schätzen).
 
 ## Voraussetzungen
 - Android 8.0+, Bluetooth LE, gekoppeltes HUD
-- [OsmAnd](https://osmand.net) (Google Play, F-Droid "OsmAnd~" oder APK). In OsmAnd diese App unter *Verbundene Apps* freigeben (Menüname je nach Version).
-- Benachrichtigungszugriff für diese App (für OsmAnd, WhatsApp, Anrufe)
+- [OSMAnd](https://osmand.net) (Google Play, F-Droid "OSMAnd~" oder APK). In OSMAnd diese App unter *Verbundene Apps* freigeben (Menüname je nach Version).
+- Benachrichtigungszugriff für diese App (für OSMAnd, WhatsApp, Anrufe)
 
 Vom Autor mit einem HUD auf einem Xiaomi 10T (LineageOS) getestet. Andere Geräte, Firmwarestände und Android-Versionen sind ungetestet.
 
@@ -35,18 +35,18 @@ Protokoll und Parser haben Unit-Tests (`HudProtocolTest`, `OsmAndNotificationPar
 
 ## Einrichten
 1. HUD einschalten und in den Android-Bluetooth-Einstellungen koppeln.
-2. App öffnen, "HUD verbinden / Dienst starten" tippen, Berechtigungen erlauben.
-3. "Akku-Optimierung ausschalten" tippen und den Benachrichtigungszugriff erlauben (Reiter Werkzeuge).
-4. Navigation in OsmAnd starten.
+2. App öffnen, den Schalter "HUD verbinden" einschalten, Berechtigungen erlauben.
+3. Im Reiter Werkzeuge die Schalter "Benachrichtigungszugriff" und "Akku-Optimierung ausgeschaltet" antippen und in den Android-Einstellungen erlauben (die Schalter zeigen danach "an").
+4. Navigation in OSMAnd starten.
 
 ## Fehlerbehebung (APK installieren)
 - **„App wurde zum Schutz deines Geräts blockiert" (Google Play Protect):** *Weitere Details* antippen, dann *Trotzdem installieren*. Play Protect kennt den Signaturschlüssel dieser Open-Source-App noch nicht.
-- **Benachrichtigungszugriff ausgegraut („Eingeschränkte Einstellung"):** Ab Android 13 ist das für Apps gesperrt, die per Datei oder Browser installiert wurden. *Einstellungen → Apps → OsmAnd HUD Bridge* öffnen, oben rechts das **⋮-Menü** antippen, **Eingeschränkte Einstellungen zulassen** wählen und bestätigen, danach den Benachrichtigungszugriff einschalten. Fehlt das Menü, den ausgegrauten Schalter einmal antippen und erneut nachsehen. Menünamen unterscheiden sich je nach Hersteller.
-- **Keine Daten von OsmAnd:** Die App in OsmAnd unter *Verbundene Apps* aktivieren (nach jeder Neuinstallation mit anderer Signatur erneut).
+- **Benachrichtigungszugriff ausgegraut („Eingeschränkte Einstellung"):** Ab Android 13 ist das für Apps gesperrt, die per Datei oder Browser installiert wurden. *Einstellungen → Apps → OSMAnd HUD Bridge* öffnen, oben rechts das **⋮-Menü** antippen, **Eingeschränkte Einstellungen zulassen** wählen und bestätigen, danach den Benachrichtigungszugriff einschalten. Fehlt das Menü, den ausgegrauten Schalter einmal antippen und erneut nachsehen. Menünamen unterscheiden sich je nach Hersteller.
+- **Keine Daten von OSMAnd:** Die App in OSMAnd unter *Verbundene Apps* aktivieren (nach jeder Neuinstallation mit anderer Signatur erneut).
 
 ## Datenschutz
-- Benachrichtigungen von OsmAnd, WhatsApp und Anrufen werden nur gelesen, um sie am HUD anzuzeigen. Nichts wird gespeichert oder gesendet.
-- Für Straßennamen und Tempolimits wird die ungefähre Position an einen Overpass-Server (OpenStreetMap) gesendet. Abschaltbar unter Einstellungen → Datenquellen.
+- Benachrichtigungen von OSMAnd, WhatsApp und Anrufen werden nur gelesen, um sie am HUD anzuzeigen. Nichts wird gespeichert oder gesendet.
+- Für Straßennamen und Tempolimits wird die ungefähre Position an einen Overpass-Server (OpenStreetMap) gesendet. Abschaltbar im Reiter Tempolimit → Datenquelle.
 - Das Protokoll liegt nur auf dem Gerät. Es kann Namen von Anrufern oder Absendern enthalten, vor dem Teilen prüfen.
 
 ## Protokoll

@@ -87,7 +87,7 @@ class OsmAndNotificationParserTest {
     }
 
     @Test fun turnFromNotificationTitle() {
-        // Titel aus dem Geraete-Log (OsmAnd~)
+        // Titel aus dem Geraete-Log (OSMAnd~)
         fun t(title: String) = OsmAndNotificationParser.parse(title, emptyList()).turn
         assertEquals(NavCommand.TURN_RIGHT, t("400 m \u2022 rechts abbiegen, dann"))
         assertEquals(NavCommand.TURN_LEFT, t("5,0 km \u2022 links abbiegen, dann"))

@@ -26,12 +26,12 @@ class HudController(private val client: HudClient) {
     private var lastSendAt = 0L
     private var routeShown: Boolean? = null
 
-    // Hochrechnung der Manöver-Distanz zwischen zwei OsmAnd-Meldungen (OsmAnd meldet nur alle ca. 3 s)
+    // Hochrechnung der Manöver-Distanz zwischen zwei OSMAnd-Meldungen (OSMAnd meldet nur alle ca. 3 s)
     private var refMeters: Int? = null
     private var refAt = 0L
     private var refCommand: NavCommand? = null
     private var rate = 0f // Meter pro Sekunde, aus den letzten beiden Meldungen
-    var threshold: ThresholdMode = ThresholdMode.ONE_KM
+    var threshold: ThresholdMode = ThresholdMode.NORMAL
 
     var mode: DisplayMode = DisplayMode.NAVIGATOR
         private set
@@ -42,7 +42,7 @@ class HudController(private val client: HudClient) {
         mode = m
         client.mode = m
         BridgeBus.log("Anzeigemodus: ${m.title}")
-        if (!client.isReady) return
+        if (!client.isReady || justage) return // im Justage-Modus gilt der neue Modus erst nach dem Beenden
         if (client.send(HudProtocol.switchMode(m))) {
             sent = emptyMap()
             routeShown = null
@@ -51,6 +51,45 @@ class HudController(private val client: HudClient) {
             // Warteschlange voll: sauber neu aufbauen lassen
             BridgeBus.log("Moduswechsel zurückgestellt")
         }
+    }
+
+    private var justage = false
+    private var brightnessStep = Int.MIN_VALUE
+
+    /** Tempowarnung: an/aus und Toleranz in km/h (HUD zeigt Tempo und Limit fett ab Limit + Toleranz). */
+    fun setWarn(enabled: Boolean, toleranceKmh: Int) {
+        val t = toleranceKmh.coerceIn(0, 30)
+        if (want.warnEnabled == enabled && want.warnToleranceKmh == t) return
+        want = want.copy(warnEnabled = enabled, warnToleranceKmh = t)
+        flush()
+    }
+
+    /** Helligkeit: -1 = automatisch, 0..2 = dunkel/mittel/hell. Wird beim Verbinden ohnehin gesetzt. */
+    fun setBrightness(step: Int) {
+        if (step == brightnessStep) return
+        brightnessStep = step
+        client.brightnessStep = step
+        BridgeBus.log("Helligkeit: " + if (step < 0) "automatisch" else listOf("dunkel", "mittel", "hell")[step.coerceIn(0, 2)])
+        if (client.isReady) client.send(listOf(HudProtocol.brightness(step)))
+    }
+
+    /** Justage-Modus ein/aus. Gibt false zurück, wenn das HUD nicht verbunden ist (dann bleibt er aus). */
+    fun setJustage(on: Boolean): Boolean {
+        if (on == justage) return true
+        if (!client.isReady) return !on
+        if (on) {
+            if (!client.send(listOf(HudProtocol.enterJustage()))) return false
+            justage = true
+            BridgeBus.log("Justage-Modus ein")
+        } else {
+            if (!client.send(HudProtocol.leaveJustage(mode))) return false
+            justage = false
+            BridgeBus.log("Justage-Modus aus")
+            sent = emptyMap()
+            routeShown = null
+            flush()
+        }
+        return true
     }
 
     /** Startmodus vor dem Verbinden setzen (ohne Senden). */
@@ -78,7 +117,7 @@ class HudController(private val client: HudClient) {
         want = want.copy(currentStreet = name)
         flush()
     }
-    /** Kreisverkehr-Ausfahrt aus der OsmAnd-Benachrichtigung (die AIDL-Schnittstelle liefert sie nicht). */
+    /** Kreisverkehr-Ausfahrt aus der OSMAnd-Benachrichtigung (die AIDL-Schnittstelle liefert sie nicht). */
     private var exitHint: Int? = null
 
     fun setExitHint(exit: Int?) {
@@ -93,8 +132,8 @@ class HudController(private val client: HudClient) {
     }
 
     /** 0 = unbekannt. */
-    fun setLimit(kmh: Int) {
-        want = want.copy(speedLimitKmh = kmh)
+    fun setLimit(kmh: Int, estimated: Boolean = false) {
+        want = want.copy(speedLimitKmh = kmh, limitEstimated = estimated && kmh > 0)
         flush()
     }
 
@@ -167,7 +206,7 @@ class HudController(private val client: HudClient) {
         flush()
     }
 
-    /** Ziel erreicht (Ansage "reached_destination" von OsmAnd): Zielflagge für einige Sekunden. */
+    /** Ziel erreicht (Ansage "reached_destination" von OSMAnd): Zielflagge für einige Sekunden. */
     fun showGoal() {
         refMeters = null; rate = 0f; refCommand = null
         want = want.copy(partDistanceM = null, command = NavCommand.GOAL, roundaboutExit = null)
@@ -195,6 +234,7 @@ class HudController(private val client: HudClient) {
     }
 
     fun onReady() {
+        justage = false // der Verbindungsaufbau aktiviert den normalen Bildschirm wieder
         sent = emptyMap()
         routeShown = null
         flush()
@@ -236,7 +276,7 @@ class HudController(private val client: HudClient) {
     }
 
     private fun flush(force: Boolean = false) {
-        if (!client.isReady) return
+        if (!client.isReady || justage) return
         val eff = effective()
         val wantFields = HudProtocol.encodeState(eff, mode)
         if (force) sent = emptyMap()

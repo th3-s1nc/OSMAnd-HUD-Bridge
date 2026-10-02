@@ -2,25 +2,25 @@ package io.github.th3s1nc.osmandhudbridge.nav
 
 import io.github.th3s1nc.osmandhudbridge.protocol.NavCommand
 
-/** Was aus der OsmAnd-Navigations-Benachrichtigung gelesen wurde. null = nicht enthalten. */
+/** Was aus der OSMAnd-Navigations-Benachrichtigung gelesen wurde. null = nicht enthalten. */
 data class OsmAndNotificationInfo(
     val turnDistanceM: Int?,
     val roundaboutExit: Int?,
     val routeDistanceM: Int?,
     val routeMinutes: Int?,
-    /** Tempo laut OsmAnd (bei Simulation das simulierte Tempo), km/h */
+    /** Tempo laut OSMAnd (bei Simulation das simulierte Tempo), km/h */
     val speedKmh: Int? = null,
     /** Ankunftszeit (Uhrzeit-Teil der Restweg-Zeile), 24-Stunden-Format */
     val arrivalHour: Int? = null,
     val arrivalMinute: Int? = null,
     /** Strassenname aus der Anweisungs-Zeile; nur wenn der Anweisungstext sicher erkannt wurde */
     val nextStreet: String? = null,
-    /** Abbiegeart aus dem Titel (Ersatz, falls die OsmAnd-Schnittstelle nichts liefert) */
+    /** Abbiegeart aus dem Titel (Ersatz, falls die OSMAnd-Schnittstelle nichts liefert) */
     val turn: NavCommand? = null
 )
 
 /**
- * Format (deutsche OsmAnd-Oberfläche, am Gerät gesehen):
+ * Format (deutsche OSMAnd-Oberfläche, am Gerät gesehen):
  *   Titel:  "2,3 km • Nehmen Sie die 2 Ausfahrt"
  *   Zeile:  "Nehmen Sie die 2 Ausfahrt St 2615 Hauptstraße 600 m"
  *   Zeile:  "2,9 km • Hauptstraße 7, Köfering"
@@ -146,14 +146,14 @@ object OsmAndNotificationParser {
     }
 }
 
-/** Ansagen des OsmAnd-Sprachrouters (Callback registerForVoiceRouterMessages). */
+/** Ansagen des OSMAnd-Sprachrouters (Callback registerForVoiceRouterMessages). */
 object OsmAndVoice {
     /** "reached_destination" kommt, wenn das Ziel erreicht ist (am Gerät gesehen: cmds=[reached_destination, Arbeit]). */
     fun isDestinationReached(commands: List<String>?): Boolean =
         commands?.any { it == "reached_destination" } == true
 
     /**
-     * Zwischenziel erreicht. OsmAnd nennt das Kommando vermutlich "reached_intermediate"
+     * Zwischenziel erreicht. OSMAnd nennt das Kommando vermutlich "reached_intermediate"
      * (nicht am Gerät gesehen), daher tolerant: "reached_*" mit intermediate/via/waypoint.
      */
     fun isViaReached(commands: List<String>?): Boolean =

@@ -7,7 +7,7 @@ import io.github.th3s1nc.osmandhudbridge.BridgeBus
 import io.github.th3s1nc.osmandhudbridge.BridgeService
 
 /**
- * Liest die Navigations-Benachrichtigung von OsmAnd mit (Restweg, Restzeit, evtl. Ausfahrt).
+ * Liest die Navigations-Benachrichtigung von OSMAnd mit (Restweg, Restzeit, evtl. Ausfahrt).
  * Braucht die Freigabe "Benachrichtigungszugriff" in den Android-Einstellungen.
  * Der Inhalt wird ins Log geschrieben und ausgewertet (Restweg, Restzeit, Kreisverkehr-Ausfahrt).
  */
@@ -35,7 +35,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
         val line = parts.joinToString(" | ")
         if (line.isEmpty() || line == last) return
         last = line
-        BridgeBus.log("OsmAnd-Notification (${n.id}): $line")
+        BridgeBus.log("OSMAnd-Notification (${n.id}): $line")
         val body = ArrayList<String>()
         e.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.let { body += it.split('\n') }
         e.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.let { body += it.split('\n') }

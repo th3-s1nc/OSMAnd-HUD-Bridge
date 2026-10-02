@@ -50,6 +50,8 @@ class HudClient(private val context: Context, private val listener: Listener) {
 
     /** Anzeigemodus, der beim Verbinden aktiviert wird (der Controller hält ihn aktuell). */
     @Volatile var mode: io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.NAVIGATOR
+    /** Helligkeit beim Verbinden: -1 = automatisch, 0..2 = manuell (dunkel, mittel, hell). */
+    @Volatile var brightnessStep: Int = -1
 
     private var address: String? = null
     private var wantRun = false
@@ -276,7 +278,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
         descQueue.addLast {
             // alle CCCDs fertig: Handshake, danach bereit
             val cal = Calendar.getInstance()
-            val hs = HudProtocol.handshake(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), mode)
+            val hs = HudProtocol.handshake(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE), mode, brightnessStep)
             hs.forEachIndexed { i, m ->
                 msgQueue.addLast(Item(m, if (i == hs.lastIndex) ({ becomeReady() }) else null))
             }

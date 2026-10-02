@@ -13,7 +13,7 @@ import java.util.concurrent.Executors
 
 /** Status- und Logsammlung für die Oberfläche (und zum Weitergeben bei der Fehlersuche). */
 object BridgeBus {
-    private const val TAG = "OsmAndHudBridge"
+    private const val TAG = "OSMAndHudBridge"
     private const val MAX_LINES = 300
     private const val LOG_NAME = "osmand-hud-bridge-log.txt"
     private const val MAX_BYTES = 1_000_000 // danach wird die ältere Hälfte verworfen
@@ -60,9 +60,17 @@ object BridgeBus {
 
     @Volatile var hud = "HUD: –"
     @Volatile var gps = "GPS: –"
-    @Volatile var osm = "OsmAnd: –"
+    @Volatile var osm = "OSMAnd: –"
     @Volatile var limit = "Limit: –"
+    @Volatile var preload = "–"
     @Volatile var onChange: (() -> Unit)? = null
+
+    /** Status des Vorladens (nur anzeigen, kein Logeintrag). */
+    fun updatePreload(text: String) {
+        if (text == preload) return
+        preload = text
+        changed()
+    }
 
     @Synchronized
     fun log(msg: String) {

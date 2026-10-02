@@ -205,9 +205,16 @@ object HudProtocol {
             lanes.map { Protobuf.message(1, Protobuf.uint(1, it.directions), Protobuf.uint(2, it.recommendation)) }
         )
 
+    /**
+     * "Tempo ok"-Flag fürs HUD: bei zu schnell zeigt es Tempo und Limit fett. Warnung aus oder Limit unbekannt = immer ok,
+     * sonst ok bis Limit + Toleranz (km/h).
+     */
+    fun speedOk(speedKmh: Float, limitKmh: Int, warnEnabled: Boolean = true, toleranceKmh: Int = 0): Boolean =
+        !warnEnabled || limitKmh <= 0 || speedKmh <= limitKmh + toleranceKmh
+
     /** Alle Felder des Navigations-Bildschirms, nach Feldnummer sortiert. */
     fun encodeState(s: HudState, mode: DisplayMode = DisplayMode.NAVIGATOR): LinkedHashMap<Int, ByteArray> {
-        val ok = s.speedLimitKmh <= 0 || s.speedKmh <= s.speedLimitKmh
+        val ok = s.limitEstimated || speedOk(s.speedKmh, s.speedLimitKmh, s.warnEnabled, s.warnToleranceKmh)
         val m = LinkedHashMap<Int, ByteArray>()
         m[F_SPEED] = speedField(s.speedKmh)
         m[F_SPEED_LIMIT] = speedLimitField(s.speedLimitKmh, ok, s.camera)
@@ -282,8 +289,30 @@ object HudProtocol {
     /** Automatische Helligkeit einschalten (Wert 2 = ein), beim Verbinden. */
     fun brightnessAutomatic() = command(Protobuf.message(10, Protobuf.message(1, Protobuf.uint(2, 2))))
 
-    /** Ablauf direkt nach dem Verbinden (Navigations-Bildschirm 13). */
-    fun handshake(hour: Int, minute: Int, mode: DisplayMode = DisplayMode.NAVIGATOR): List<HudMessage> = listOf(
+    /**
+     * Manuelle Helligkeit: Stufe 1 = dunkel, 2 = mittel, 3 = hell (am HUD geprüft).
+     * Die Zuordnung Regler -> Stufe steht nur in [brightnessLevelForStep].
+     */
+    fun brightnessManual(level: Int) =
+        command(Protobuf.message(10, Protobuf.message(1, Protobuf.uint(1, level), Protobuf.uint(2, 1))))
+
+    /** Regler-Stellung 0 = dunkel, 1 = mittel, 2 = hell -> Helligkeitsstufe des HUD. */
+    fun brightnessLevelForStep(step: Int): Int = step.coerceIn(0, 2) + 1
+
+    /** Helligkeit nach Einstellung: step < 0 = automatisch, sonst Reglerstellung 0..2. */
+    fun brightness(step: Int) = if (step < 0) brightnessAutomatic() else brightnessManual(brightnessLevelForStep(step))
+
+    /** Justage-Modus: das HUD zeigt sein Justagebild (Bildschirm 1). Beenden: [leaveJustage]. */
+    fun enterJustage() = activateScreen(JUSTAGE_SCREEN)
+
+    /** Justage beenden: Konfiguration lesen, Elemente des Modus setzen, Bildschirm des Modus aktivieren. */
+    fun leaveJustage(mode: DisplayMode): List<HudMessage> =
+        listOf(readConfig(), HudMessage(showHide(mode.screenId, mode.hide, mode.show)), activateScreen(mode.screenId))
+
+    const val JUSTAGE_SCREEN = 1
+
+    /** Ablauf direkt nach dem Verbinden (Navigations-Bildschirm 13). [brightnessStep]: -1 = automatisch, 0..2 = manuell. */
+    fun handshake(hour: Int, minute: Int, mode: DisplayMode = DisplayMode.NAVIGATOR, brightnessStep: Int = -1): List<HudMessage> = listOf(
         navigationFinished(),
         readConfig(),
         HudMessage(
@@ -292,6 +321,6 @@ object HudProtocol {
             )
         ),
         activateScreen(mode.screenId),
-        brightnessAutomatic()
+        brightness(brightnessStep)
     )
 }

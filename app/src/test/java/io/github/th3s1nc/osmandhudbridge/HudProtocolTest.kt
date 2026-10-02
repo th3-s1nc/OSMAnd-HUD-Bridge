@@ -11,6 +11,7 @@ import io.github.th3s1nc.osmandhudbridge.protocol.LaneRecommendation
 import io.github.th3s1nc.osmandhudbridge.protocol.NavCommand
 import io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -281,5 +282,35 @@ class HudProtocolTest {
         val onlyCurrent = HudProtocol.encodeState(HudState(currentStreet = "Dorfstr"), DisplayMode.CITY)
         assertEquals(hex(HudProtocol.streetField(17, "Dorfstr")), hex(onlyCurrent[17]!!))
         assertEquals(hex(HudProtocol.streetField(15, null)), hex(onlyCurrent[15]!!))
+    }
+
+    @Test fun brightnessAndJustageCommands() {
+        assertEquals("a206085206 0a0408031001".replace(" ", ""), hex(HudProtocol.brightnessManual(3).body))
+        assertEquals("a2060652040a0210 02".replace(" ", ""), hex(HudProtocol.brightnessAutomatic().body))
+        assertEquals("a20604 2a020801".replace(" ", ""), hex(HudProtocol.enterJustage().body))
+        // Regler: 0 dunkel, 1 mittel, 2 hell
+        assertEquals(listOf(1, 2, 3), listOf(0, 1, 2).map { HudProtocol.brightnessLevelForStep(it) })
+        assertEquals(hex(HudProtocol.brightnessAutomatic().body), hex(HudProtocol.brightness(-1).body))
+        assertEquals(hex(HudProtocol.brightnessManual(3).body), hex(HudProtocol.brightness(2).body))
+        // Handshake endet mit der gewählten Helligkeit
+        assertEquals(hex(HudProtocol.brightnessManual(2).body), hex(HudProtocol.handshake(1, 2, DisplayMode.NAVIGATOR, 1).last().body))
+        // Justage verlassen: Konfiguration lesen, Elemente, Bildschirm aktivieren
+        val leave = HudProtocol.leaveJustage(DisplayMode.CITY)
+        assertEquals(3, leave.size)
+        assertEquals(hex(HudProtocol.activateScreen(DisplayMode.CITY.screenId).body), hex(leave.last().body))
+    }
+
+    @Test fun speedWarningTolerance() {
+        assertTrue(HudProtocol.speedOk(60f, 50, true, 10))   // genau Limit + Toleranz
+        assertFalse(HudProtocol.speedOk(61f, 50, true, 10))
+        assertTrue(HudProtocol.speedOk(120f, 50, false, 10)) // Warnung aus: immer ok
+        assertTrue(HudProtocol.speedOk(120f, 0, true, 0))    // Limit unbekannt: ok
+        val st = HudState(speedKmh = 58f, speedLimitKmh = 50, warnEnabled = true, warnToleranceKmh = 10)
+        assertEquals(hex(HudProtocol.speedLimitField(50, true, 0)), hex(HudProtocol.encodeState(st, DisplayMode.NAVIGATOR)[3]!!))
+        // geschätztes Limit: nie warnen
+        val est = HudState(speedKmh = 130f, speedLimitKmh = 100, limitEstimated = true)
+        assertEquals(hex(HudProtocol.speedLimitField(100, true, 0)), hex(HudProtocol.encodeState(est, DisplayMode.NAVIGATOR)[3]!!))
+        val over = st.copy(speedKmh = 65f)
+        assertEquals(hex(HudProtocol.speedLimitField(50, false, 0)), hex(HudProtocol.encodeState(over, DisplayMode.NAVIGATOR)[3]!!))
     }
 }

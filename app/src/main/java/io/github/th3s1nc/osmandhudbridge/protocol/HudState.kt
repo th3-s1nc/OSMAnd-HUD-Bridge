@@ -22,7 +22,12 @@ data class HudState(
     val arrivalHour: Int? = null,
     val arrivalMinute: Int? = null,
     val nextStreet: String? = null,
-    val currentStreet: String? = null
+    val currentStreet: String? = null,
+    /** Tempowarnung: fett ab Limit + Toleranz. Aus = HUD bekommt immer "ok". */
+    /** Limit ist nur geschätzt (nicht aus den Kartendaten): dann nie warnen. */
+    val limitEstimated: Boolean = false,
+    val warnEnabled: Boolean = true,
+    val warnToleranceKmh: Int = 0
 )
 
 /** Ab welcher Entfernung ein Manöver gezeigt wird (Einstellung "Abstand der Anweisungen"). */
@@ -30,9 +35,7 @@ enum class ThresholdMode(val meters: IntArray?) {
     ALWAYS(null),
     SHORT(intArrayOf(300, 600, 1000)),
     NORMAL(intArrayOf(500, 1000, 2000)),
-    LONG(intArrayOf(800, 2000, 4000)),
-    /** Immer erst ab 1 km vor dem Manöver anzeigen. */
-    ONE_KM(intArrayOf(1000, 1000, 1000));
+    LONG(intArrayOf(800, 2000, 4000));
 
     /** true = Manöver noch zu weit weg, nicht anzeigen. Schwelle hängt vom Tempolimit ab (<=50, <=100, sonst/unbekannt). */
     fun isOver(speedLimitKmh: Int, distanceM: Int): Boolean {

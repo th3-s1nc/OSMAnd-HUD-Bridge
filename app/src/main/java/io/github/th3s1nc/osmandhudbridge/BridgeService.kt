@@ -14,6 +14,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
@@ -31,7 +33,7 @@ import io.github.th3s1nc.osmandhudbridge.nav.OsmAndTurns
 import kotlin.math.roundToInt
 
 /**
- * Foreground-Service: hält HUD-Verbindung, GPS-Tempo und OsmAnd-Anbindung am Leben,
+ * Foreground-Service: hält HUD-Verbindung, GPS-Tempo und OSMAnd-Anbindung am Leben,
  * auch bei ausgeschaltetem Display.
  */
 class BridgeService : Service(), HudClient.Listener {
@@ -53,7 +55,6 @@ class BridgeService : Service(), HudClient.Listener {
     private var notifNavActive = false
     private var lastGpsKmh = 0f
     private var lastOsmKmh = 0
-    private var idleStopEnabled = true
     private var idleSince = 0L
     private var lastOsmAt = 0L
 
@@ -117,12 +118,14 @@ class BridgeService : Service(), HudClient.Listener {
             stopSelf()
             return
         }
+        prefs.edit().putBoolean(KEY_JUSTAGE, false).apply() // Justage bleibt nie über einen Neustart hinweg an
         handler = Handler(Looper.getMainLooper())
         client = HudClient(applicationContext, this)
         controller = HudController(client)
         client.mode = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(prefs.getString(KEY_MODE, null))
         controller.setModeSilently(client.mode)
-        limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider({ controller.setLimit(it) }, { controller.setCurrentStreet(it) })
+        limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider(java.io.File(cacheDir, "limits"), { kmh, est -> controller.setLimit(kmh, est) }, { controller.setCurrentStreet(it) })
+        restorePosition()
         started = true
         running = true
 
@@ -131,23 +134,23 @@ class BridgeService : Service(), HudClient.Listener {
             ContextCompat.RECEIVER_EXPORTED
         )
         val pm = getSystemService(PowerManager::class.java)
-        wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OsmAndHudBridge:service")?.apply {
+        wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OSMAndHudBridge:service")?.apply {
             setReferenceCounted(false)
             acquire()
         }
         BridgeBus.log("Dienst gestartet, HUD ${prefs.getString(KEY_NAME, addr)}")
         io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationBus.listener = { info ->
             handler.post {
-                if (!useOsmand) return@post // Schalter "OsmAnd-Navigation übernehmen" aus: gar nichts aus OsmAnd
+                if (!useOsmand) return@post // Schalter "OSMAnd-Navigation übernehmen" aus: gar nichts aus OSMAnd
                 info.speedKmh?.let { onOsmandSpeed(it) }
-                // Ersatz: liefert die OsmAnd-Schnittstelle nichts (z. B. Bridge in OsmAnd nicht freigegeben),
+                // Ersatz: liefert die OSMAnd-Schnittstelle nichts (z. B. Bridge in OSMAnd nicht freigegeben),
                 // kommen Pfeil und Entfernung aus der Benachrichtigung
                 val d = info.turnDistanceM
                 val t = info.turn
                 if (d != null && t != null && SystemClock.elapsedRealtime() - lastAidlNavAt > AIDL_SILENT_MS) {
                     if (!notifNavActive) {
                         notifNavActive = true
-                        BridgeBus.log("Pfeil aus OsmAnd-Benachrichtigung (Schnittstelle liefert nichts)")
+                        BridgeBus.log("Pfeil aus OSMAnd-Benachrichtigung (Schnittstelle liefert nichts)")
                     }
                     controller.setNav(d, t, info.roundaboutExit, extrapolate = false)
                 }
@@ -179,7 +182,7 @@ class BridgeService : Service(), HudClient.Listener {
         running = false
         BridgeBus.hud = "HUD: Dienst beendet"
         BridgeBus.gps = "GPS: –"
-        BridgeBus.osm = "OsmAnd: –"
+        BridgeBus.osm = "OSMAnd: –"
         BridgeBus.log("Dienst beendet")
         super.onDestroy()
     }
@@ -188,6 +191,7 @@ class BridgeService : Service(), HudClient.Listener {
         override fun run() {
             if (checkIdle()) return
             controller.tick()
+            limitProvider.tickPreload(preloadNetworkOk(), preloadMobile)
             if (speedFromOsmand && !osmSpeedFresh()) controller.setSpeed(lastGpsKmh)
             if (locMgr != null && lastFixAt != 0L &&
                 SystemClock.elapsedRealtime() - lastFixAt > 5_000
@@ -200,13 +204,45 @@ class BridgeService : Service(), HudClient.Listener {
 
     /** Beendet den Dienst, wenn das HUD lange nicht verbunden war. Gibt true zurück, wenn beendet wurde. */
     private fun checkIdle(): Boolean {
-        if (client.isReady) { idleSince = 0L; return false }
+        if (client.isReady || limitProvider.preloadActive) { idleSince = 0L; return false }
         val now = SystemClock.elapsedRealtime()
         if (idleSince == 0L) { idleSince = now; return false }
-        if (!idleStopEnabled || now - idleSince < IDLE_STOP_MS) return false
-        BridgeBus.log("HUD seit ${IDLE_STOP_MS / 60_000} Minuten nicht verbunden -> Dienst beendet (in den Einstellungen abschaltbar)")
+        if (now - idleSince < IDLE_STOP_MS) return false
+        BridgeBus.log("HUD seit ${IDLE_STOP_MS / 60_000} Minuten nicht verbunden -> Dienst beendet (beim nächsten Öffnen der App startet er wieder)")
         stopSelf()
         return true
+    }
+
+    private var preloadMobile = false
+
+    /**
+     * Darf jetzt im Voraus geladen werden? Immer im WLAN bzw. Netz ohne Volumenbegrenzung. Über mobile Daten nur, wenn der
+     * Nutzer es erlaubt hat, und dann nie im Roaming.
+     */
+    private fun preloadNetworkOk(): Boolean = try {
+        val cm = getSystemService(ConnectivityManager::class.java)
+        val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && (
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) ||
+                (preloadMobile && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING))
+            )
+    } catch (_: Exception) { false }
+
+    private var lastPosSavedAt = 0L
+
+    /** Letzte Position merken (höchstens alle 10 Minuten), damit das Vorladen auch ohne GPS-Fix weiß, wo es laden soll. */
+    private fun rememberPosition(loc: Location) {
+        val now = SystemClock.elapsedRealtime()
+        if (lastPosSavedAt != 0L && now - lastPosSavedAt < 10 * 60_000L) return
+        lastPosSavedAt = now
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_LAST_POS, "${loc.latitude},${loc.longitude}").apply()
+    }
+
+    private fun restorePosition() {
+        try {
+            val parts = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_LAST_POS, null)?.split(",")
+            if (parts != null && parts.size == 2) limitProvider.setCenter(parts[0].toDouble(), parts[1].toDouble())
+        } catch (_: Exception) { }
     }
 
     private val btReceiver = object : BroadcastReceiver() {
@@ -227,6 +263,7 @@ class BridgeService : Service(), HudClient.Listener {
 
     override fun onReady() {
         controller.onReady()
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_JUSTAGE, false).apply()
     }
 
     override fun onLinkLost() {
@@ -239,6 +276,7 @@ class BridgeService : Service(), HudClient.Listener {
         override fun onLocationChanged(location: Location) {
             lastFixAt = SystemClock.elapsedRealtime()
             limitProvider.onLocation(location)
+            rememberPosition(location)
             if (location.hasBearing() && location.hasSpeed() && location.speed > 1.5f) {
                 controller.setHeading(location.bearing.roundToInt())
             }
@@ -279,7 +317,7 @@ class BridgeService : Service(), HudClient.Listener {
         }
     }
 
-    // ---------------- OsmAnd ----------------
+    // ---------------- OSMAnd ----------------
 
     private fun onNotice(n: io.github.th3s1nc.osmandhudbridge.nav.Notice) {
         val sp = getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -297,19 +335,30 @@ class BridgeService : Service(), HudClient.Listener {
         lastOsmAt = SystemClock.elapsedRealtime()
         if (speedFromOsmand) {
             controller.setSpeed(kmh.toFloat())
-            BridgeBus.gps = "Tempo: $kmh km/h (OsmAnd)"
+            BridgeBus.gps = "Tempo: $kmh km/h (OSMAnd)"
         }
     }
 
     private fun applyConfig() {
         val sp = getSharedPreferences(PREFS, MODE_PRIVATE)
         speedFromOsmand = sp.getString(KEY_SPEED_SRC, "gps") == "osmand"
+        limitProvider.guessMissing = sp.getBoolean(KEY_GUESS_LIMIT, false)
+        limitProvider.useExtraTags = sp.getBoolean(KEY_LIM_TAGS, true)
+        limitProvider.useNeighbors = sp.getBoolean(KEY_LIM_NEIGHBORS, true)
+        limitProvider.useSigns = sp.getBoolean(KEY_LIM_SIGNS, true)
+        preloadMobile = sp.getBoolean(KEY_PRELOAD_MOBILE, false)
+        limitProvider.preloadKm = sp.getInt(KEY_PRELOAD_KM, DEFAULT_PRELOAD_KM)
         limitProvider.enabled = sp.getBoolean(KEY_OSM_LIMIT, true)
-        idleStopEnabled = sp.getBoolean(KEY_IDLE_STOP, true)
         controller.setMode(io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(sp.getString(KEY_MODE, null)))
+        controller.setWarn(sp.getBoolean(KEY_WARN, true), sp.getInt(KEY_WARN_TOL, DEFAULT_WARN_TOL))
+        controller.setBrightness(if (sp.getBoolean(KEY_BRIGHT_AUTO, true)) -1 else sp.getInt(KEY_BRIGHT_STEP, 1).coerceIn(0, 2))
+        if (!controller.setJustage(sp.getBoolean(KEY_JUSTAGE, false))) {
+            sp.edit().putBoolean(KEY_JUSTAGE, false).apply() // HUD nicht verbunden: Schalter zurücksetzen
+            BridgeBus.log("Justage nur bei verbundenem HUD möglich")
+        }
         val thr = sp.getString(KEY_THRESHOLD, null)
         controller.threshold = io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode.values()
-            .firstOrNull { it.name == thr } ?: io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode.ONE_KM
+            .firstOrNull { it.name == thr } ?: io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode.NORMAL
         val use = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_OSMAND, true)
         useOsmand = use
         if (use && osmand == null) {
@@ -320,7 +369,7 @@ class BridgeService : Service(), HudClient.Listener {
                     notifNavActive = false
                     if (meters != lastNavMeters || turn != lastNavTurn) {
                         lastNavMeters = meters; lastNavTurn = turn
-                        BridgeBus.log("OsmAnd: $meters m, Typ $turn -> ${OsmAndTurns.toHudCommand(turn) ?: "kein Pfeil"}")
+                        BridgeBus.log("OSMAnd: $meters m, Typ $turn -> ${OsmAndTurns.toHudCommand(turn) ?: "kein Pfeil"}")
                     }
                     controller.setNav(meters.coerceAtLeast(0), OsmAndTurns.toHudCommand(turn), extrapolate = true)
                 },
@@ -341,9 +390,9 @@ class BridgeService : Service(), HudClient.Listener {
             osmand?.stop()
             osmand = null
             controller.clearNavigation()
-            BridgeBus.osm = "OsmAnd: aus"
+            BridgeBus.osm = "OSMAnd: aus"
         } else if (!use) {
-            BridgeBus.osm = "OsmAnd: aus"
+            BridgeBus.osm = "OSMAnd: aus"
         }
     }
 
@@ -369,7 +418,7 @@ class BridgeService : Service(), HudClient.Listener {
         )
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
-            .setContentTitle("OsmAnd HUD Bridge")
+            .setContentTitle("OSMAnd HUD Bridge")
             .setContentText(BridgeBus.hud)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -394,9 +443,21 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_NOTICE_CALL = "notice_call"
         const val KEY_NOTICE_MSG = "notice_msg"
         const val KEY_NOTICE_NAME = "notice_name"
-        const val KEY_AUTO = "auto_connect"
         const val KEY_ENABLED = "bridge_enabled"
-        const val KEY_IDLE_STOP = "idle_stop"
+        const val KEY_GUESS_LIMIT = "guess_limit"
+        const val KEY_PRELOAD_KM = "preload_km" // 0 = aus
+        const val KEY_PRELOAD_MOBILE = "preload_mobile" // auch über mobile Daten (nie im Roaming)
+        const val KEY_LIM_TAGS = "limit_extra_tags"
+        const val KEY_LIM_NEIGHBORS = "limit_neighbors"
+        const val KEY_LIM_SIGNS = "limit_signs"
+        const val DEFAULT_PRELOAD_KM = 25
+        private const val KEY_LAST_POS = "last_pos"
+        const val KEY_WARN = "warn_enabled"
+        const val KEY_WARN_TOL = "warn_tolerance" // km/h, 0..30
+        const val DEFAULT_WARN_TOL = 10
+        const val KEY_BRIGHT_AUTO = "brightness_auto"
+        const val KEY_BRIGHT_STEP = "brightness_step" // 0 dunkel, 1 mittel, 2 hell
+        const val KEY_JUSTAGE = "justage"
         private const val IDLE_STOP_MS = 10 * 60 * 1000L
         private const val CHANNEL = "bridge"
         private const val NOTIF_ID = 1

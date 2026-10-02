@@ -1,6 +1,6 @@
-# Hinweise (OsmAnd HUD Bridge)
+# Hinweise (OSMAnd HUD Bridge)
 
-Inoffizielles Hobbyprojekt. Keine Verbindung zu Tilsberk, Digades oder OsmAnd.
+Inoffizielles Hobbyprojekt. Keine Verbindung zu Tilsberk, Digades oder OSMAnd.
 Genannte Namen und Marken gehören ihren Inhabern. "Tilsberk" und "DVision" dienen nur der Beschreibung der Geräte-Kompatibilität.
 
 ## Haftung
@@ -14,7 +14,7 @@ Es sind keine Programmteile, Grafiken, Schriften oder Texte der Hersteller-App e
 
 | Teil | Quelle / Lizenz | Hinweis |
 |---|---|---|
-| OsmAnd-Schnittstelle (`app/src/main/aidl`, `app/src/main/java/net/osmand`) | von OsmAnd. Laut OsmAnd-Dokumentation ist die AIDL-API "No License issues - available for all possible purposes". Das Full-Library-SDK (GPLv3) wird nicht verwendet | Nicht von der MIT-Lizenz dieses Projekts erfasst. Die Dateien tragen keinen eigenen Lizenzkopf, die Aussage steht in der OsmAnd-Doku (osmand.net, "OsmAnd API / SDK"). OsmAnd-Code (GPLv3) und -Grafiken (CC BY-NC-ND) sind nicht enthalten |
+| OSMAnd-Schnittstelle (`app/src/main/aidl`, `app/src/main/java/net/osmand`) | von OSMAnd. Laut OSMAnd-Dokumentation ist die AIDL-API "No License issues - available for all possible purposes". Das Full-Library-SDK (GPLv3) wird nicht verwendet | Nicht von der MIT-Lizenz dieses Projekts erfasst. Die Dateien tragen keinen eigenen Lizenzkopf, die Aussage steht in der OSMAnd-Doku (osmand.net, "OSMAnd API / SDK"). OSMAnd-Code (GPLv3) und -Grafiken (CC BY-NC-ND) sind nicht enthalten |
 | Kartendaten (Straßennamen, Tempolimits) | © OpenStreetMap-Mitwirkende, ODbL (openstreetmap.org/copyright) | Hinweis in der App (Reiter Info) |
 | Overpass API | öffentliche Server, moderate Nutzung | für wenige Nutzer gedacht |
 | AndroidX, Material Components | Apache License 2.0 | Abhängigkeiten, werden beim Bauen geladen |

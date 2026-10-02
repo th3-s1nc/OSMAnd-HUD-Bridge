@@ -12,7 +12,7 @@ import net.osmand.aidlapi.OsmandAidlConstants
 import net.osmand.aidlapi.navigation.ANavigationUpdateParams
 import net.osmand.aidlapi.navigation.ANavigationVoiceRouterMessageParams
 
-/** Bindet an die OsmAnd-AIDL-Schnittstelle und meldet Distanz + Abbiegetyp. Verbindet sich selbständig neu. */
+/** Bindet an die OSMAnd-AIDL-Schnittstelle und meldet Distanz + Abbiegetyp. Verbindet sich selbständig neu. */
 class OsmAndClient(
     private val context: Context,
     private val handler: Handler,
@@ -29,8 +29,8 @@ class OsmAndClient(
     private val callback = OsmAndCallback(
         OsmAndCallback.Listener { meters, turn -> handler.post { onNav(meters, turn) } },
         OsmAndCallback.VoiceListener { cmds, played ->
-            // Zum Prüfen, ob OsmAnd hier die Kreisverkehr-Ausfahrt mitliefert
-            handler.post { onStatus("OsmAnd-Ansage: cmds=$cmds played=$played") }
+            // Zum Prüfen, ob OSMAnd hier die Kreisverkehr-Ausfahrt mitliefert
+            handler.post { onStatus("OSMAnd-Ansage: cmds=$cmds played=$played") }
             if (OsmAndVoice.isDestinationReached(cmds)) handler.post { onArrived() }
             else if (OsmAndVoice.isViaReached(cmds)) handler.post { onVia() }
         }
@@ -39,7 +39,7 @@ class OsmAndClient(
     private val retry = Runnable { tryBind() }
     private val bindCheck = Runnable {
         if (wantRun && bound && api == null) {
-            onStatus("OsmAnd: keine Antwort, versuche erneut")
+            onStatus("OSMAnd: keine Antwort, versuche erneut")
             rebind()
         }
     }
@@ -53,33 +53,33 @@ class OsmAndClient(
                 try {
                     api?.registerForVoiceRouterMessages(ANavigationVoiceRouterMessageParams(), callback)
                 } catch (e: Exception) {
-                    onStatus("OsmAnd: Ansagen nicht verfügbar (${e.message})")
+                    onStatus("OSMAnd: Ansagen nicht verfügbar (${e.message})")
                 }
                 if (callbackId < 0) {
-                    onStatus("OsmAnd: Bridge ist in OsmAnd nicht freigegeben (Callback-ID $callbackId). Pfeil kommt ersatzweise aus der Benachrichtigung")
+                    onStatus("OSMAnd: Bridge ist in OSMAnd nicht freigegeben (Callback-ID $callbackId). Pfeil kommt ersatzweise aus der Benachrichtigung")
                 } else {
-                    onStatus("OsmAnd: verbunden (Callback-ID $callbackId), Navigation in OsmAnd starten")
+                    onStatus("OSMAnd: verbunden (Callback-ID $callbackId), Navigation in OSMAnd starten")
                 }
             } catch (e: Exception) {
-                onStatus("OsmAnd: Anmeldung fehlgeschlagen (${e.message})")
+                onStatus("OSMAnd: Anmeldung fehlgeschlagen (${e.message})")
                 rebind()
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             api = null
-            onStatus("OsmAnd: Verbindung verloren")
+            onStatus("OSMAnd: Verbindung verloren")
             rebind()
         }
 
         override fun onBindingDied(name: ComponentName?) {
             api = null
-            onStatus("OsmAnd: Binding beendet")
+            onStatus("OSMAnd: Binding beendet")
             rebind()
         }
 
         override fun onNullBinding(name: ComponentName?) {
-            onStatus("OsmAnd: Schnittstelle liefert nichts")
+            onStatus("OSMAnd: Schnittstelle liefert nichts")
             rebind()
         }
     }
@@ -115,14 +115,14 @@ class OsmAndClient(
                 }
                 if (ok) {
                     bound = true
-                    onStatus("OsmAnd: verbinde ($pkg)")
+                    onStatus("OSMAnd: verbinde ($pkg)")
                     handler.postDelayed(bindCheck, 10_000)
                     return
                 }
                 try { context.unbindService(connection) } catch (_: Exception) {}
             }
         }
-        onStatus("OsmAnd nicht erreichbar, neuer Versuch in 10 s")
+        onStatus("OSMAnd nicht erreichbar, neuer Versuch in 10 s")
         handler.postDelayed(retry, 10_000)
     }
 
@@ -146,16 +146,16 @@ class OsmAndClient(
     }
 }
 
-/** OsmAnd-Abbiegetyp -> HUD-Pfeil. null = Pfeil leeren. Zuordnung der leichten Kurven ist eine Annahme, am Gerät prüfen. */
+/** OSMAnd-Abbiegetyp -> HUD-Pfeil. null = Pfeil leeren. Zuordnung der leichten Kurven ist eine Annahme, am Gerät prüfen. */
 object OsmAndTurns {
     fun toHudCommand(type: Int): NavCommand? = when (type) {
         OsmandAidlConstants.TURN_TYPE_C -> NavCommand.STRAIGHT
         OsmandAidlConstants.TURN_TYPE_TL -> NavCommand.TURN_LEFT
-        // "halb/leicht links" (OsmAnd Typ 3): sanfte Richtungsänderung, das HUD-Symbol "links halten" passt besser als ein Abbiegepfeil
+        // "halb/leicht links" (OSMAnd Typ 3): sanfte Richtungsänderung, das HUD-Symbol "links halten" passt besser als ein Abbiegepfeil
         OsmandAidlConstants.TURN_TYPE_TSLL -> NavCommand.KEEP_LEFT
         OsmandAidlConstants.TURN_TYPE_TSHL -> NavCommand.SHARP_LEFT
         OsmandAidlConstants.TURN_TYPE_TR -> NavCommand.TURN_RIGHT
-        // "halb/leicht rechts" (OsmAnd Typ 6, Ansage right_sl)
+        // "halb/leicht rechts" (OSMAnd Typ 6, Ansage right_sl)
         OsmandAidlConstants.TURN_TYPE_TSLR -> NavCommand.KEEP_RIGHT
         OsmandAidlConstants.TURN_TYPE_TSHR -> NavCommand.SHARP_RIGHT
         OsmandAidlConstants.TURN_TYPE_KL -> NavCommand.KEEP_LEFT

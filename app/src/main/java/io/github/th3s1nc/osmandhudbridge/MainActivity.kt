@@ -22,8 +22,8 @@ import androidx.core.content.FileProvider
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
-import com.google.android.material.chip.ChipGroup
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.slider.Slider
 import com.google.android.material.card.MaterialCardView
 import io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode
 import io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode
@@ -114,11 +114,18 @@ class MainActivity : AppCompatActivity() {
             }
             refresh()
         }
-        findViewById<MaterialButton>(R.id.btnStart).setOnClickListener { onStartClicked() }
-        findViewById<MaterialButton>(R.id.btnStop).setOnClickListener {
-            BridgeService.userStopped = true
-            stopService(Intent(this, BridgeService::class.java))
-            refresh()
+        val swService = findViewById<MaterialSwitch>(R.id.swService)
+        swService.setOnCheckedChangeListener { _, on ->
+            if (serviceSyncing) return@setOnCheckedChangeListener
+            if (on) {
+                BridgeService.userStopped = false
+                onStartClicked()
+            } else {
+                BridgeService.userStopped = true
+                stopService(Intent(this, BridgeService::class.java))
+            }
+            // Bricht der Nutzer die Auswahl ab, springt der Schalter hier wieder zurück
+            swService.postDelayed({ refresh() }, 2500)
         }
     }
 
@@ -151,7 +158,99 @@ class MainActivity : AppCompatActivity() {
                 applyConfigIfRunning()
             }
         }
+
+        // Pfeil anzeigen ab (Regler: Kurz, Normal, Lang, Immer)
+        val steps = listOf(ThresholdMode.SHORT, ThresholdMode.NORMAL, ThresholdMode.LONG, ThresholdMode.ALWAYS)
+        val names = listOf("Kurz", "Normal", "Lang", "Immer")
+        val sldThr = findViewById<Slider>(R.id.sldThr)
+        val tvThrName = findViewById<TextView>(R.id.tvThrName)
+        val boxThr = findViewById<View>(R.id.boxThrRows)
+        val tvAlways = findViewById<TextView>(R.id.tvThrAlways)
+        val thrRows = listOf(R.id.tvThr1, R.id.tvThr2, R.id.tvThr3).map { findViewById<TextView>(it) }
+        fun thrUi(i: Int) {
+            val m = steps[i.coerceIn(0, 3)]
+            tvThrName.text = names[i.coerceIn(0, 3)]
+            val t = m.meters
+            boxThr.visibility = if (t == null) View.GONE else View.VISIBLE
+            tvAlways.visibility = if (t == null) View.VISIBLE else View.GONE
+            if (t != null) for (k in 0..2) thrRows[k].text = "${t[k]} m"
+        }
+        val saved = ThresholdMode.values().firstOrNull { it.name == prefs.getString(BridgeService.KEY_THRESHOLD, null) }
+        val startIdx = saved?.let { steps.indexOf(it) }?.takeIf { it >= 0 } ?: 1 // früher gespeichertes "Ab 1 km" -> Normal
+        sldThr.value = startIdx.toFloat()
+        thrUi(startIdx)
+        sldThr.addOnChangeListener { _, value, fromUser ->
+            val i = value.toInt()
+            thrUi(i)
+            if (fromUser) {
+                prefs.edit().putString(BridgeService.KEY_THRESHOLD, steps[i].name).apply()
+                applyConfigIfRunning()
+            }
+        }
+
+        // Tempowarnung
+        val swWarn = findViewById<MaterialSwitch>(R.id.swWarn)
+        val sldWarn = findViewById<Slider>(R.id.sldWarnTol)
+        val txtWarn = findViewById<TextView>(R.id.txtWarnTol)
+        fun warnText(v: Int) { txtWarn.text = "Überschreitung: $v km/h" }
+        val tol = prefs.getInt(BridgeService.KEY_WARN_TOL, BridgeService.DEFAULT_WARN_TOL).coerceIn(0, 30)
+        sldWarn.value = tol.toFloat()
+        warnText(tol)
+        swWarn.isChecked = prefs.getBoolean(BridgeService.KEY_WARN, true)
+        sldWarn.isEnabled = swWarn.isChecked
+        swWarn.setOnCheckedChangeListener { _, on ->
+            prefs.edit().putBoolean(BridgeService.KEY_WARN, on).apply()
+            sldWarn.isEnabled = on
+            applyConfigIfRunning()
+        }
+        sldWarn.addOnChangeListener { _, value, fromUser ->
+            warnText(value.toInt())
+            if (fromUser) {
+                prefs.edit().putInt(BridgeService.KEY_WARN_TOL, value.toInt()).apply()
+                applyConfigIfRunning()
+            }
+        }
+
+        // Helligkeit
+        val swBright = findViewById<MaterialSwitch>(R.id.swBrightAuto)
+        val sldBright = findViewById<Slider>(R.id.sldBright)
+        val boxBright = findViewById<View>(R.id.boxBright)
+        sldBright.value = prefs.getInt(BridgeService.KEY_BRIGHT_STEP, 1).coerceIn(0, 2).toFloat()
+        swBright.isChecked = prefs.getBoolean(BridgeService.KEY_BRIGHT_AUTO, true)
+        fun brightUi(auto: Boolean) {
+            sldBright.isEnabled = !auto
+            boxBright.alpha = if (auto) 0.4f else 1f
+        }
+        brightUi(swBright.isChecked)
+        swBright.setOnCheckedChangeListener { _, auto ->
+            prefs.edit().putBoolean(BridgeService.KEY_BRIGHT_AUTO, auto).apply()
+            brightUi(auto)
+            applyConfigIfRunning()
+        }
+        sldBright.addOnChangeListener { _, value, fromUser ->
+            if (!fromUser) return@addOnChangeListener
+            prefs.edit().putInt(BridgeService.KEY_BRIGHT_STEP, value.toInt()).apply()
+            applyConfigIfRunning()
+        }
+
+        // Justage (wird nie gespeichert über einen Neustart hinweg; der Dienst setzt ihn zurück)
+        val swJust = findViewById<MaterialSwitch>(R.id.swJustage)
+        swJust.isChecked = false
+        prefs.edit().putBoolean(BridgeService.KEY_JUSTAGE, false).apply()
+        swJust.setOnCheckedChangeListener { _, on ->
+            if (justageSyncing) return@setOnCheckedChangeListener
+            if (on && !BridgeService.running) {
+                Toast.makeText(this, "Bitte zuerst das HUD verbinden (Übersicht, Start).", Toast.LENGTH_SHORT).show()
+                justageSyncing = true; swJust.isChecked = false; justageSyncing = false
+                return@setOnCheckedChangeListener
+            }
+            prefs.edit().putBoolean(BridgeService.KEY_JUSTAGE, on).apply()
+            applyConfigIfRunning()
+        }
     }
+
+    private var justageSyncing = false
+    private var serviceSyncing = false
 
     private fun applyConfigIfRunning() {
         if (BridgeService.running) BridgeService.send(this, BridgeService.ACTION_CONFIG)
@@ -162,20 +261,6 @@ class MainActivity : AppCompatActivity() {
         swOsmand.isChecked = prefs.getBoolean(BridgeService.KEY_OSMAND, true)
         swOsmand.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putBoolean(BridgeService.KEY_OSMAND, checked).apply()
-            applyConfigIfRunning()
-        }
-
-        val swAuto = findViewById<MaterialSwitch>(R.id.chkAuto)
-        swAuto.isChecked = prefs.getBoolean(BridgeService.KEY_AUTO, true)
-        swAuto.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean(BridgeService.KEY_AUTO, checked).apply()
-            if (checked) autoConnect()
-        }
-
-        val swIdle = findViewById<MaterialSwitch>(R.id.chkIdle)
-        swIdle.isChecked = prefs.getBoolean(BridgeService.KEY_IDLE_STOP, true)
-        swIdle.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean(BridgeService.KEY_IDLE_STOP, checked).apply()
             applyConfigIfRunning()
         }
 
@@ -196,6 +281,54 @@ class MainActivity : AppCompatActivity() {
             applyConfigIfRunning()
         }
 
+        // Tempolimit: einzelne Schalter (Ortsschilder und Nachbarabschnitte wirken nur beim Schätzen)
+        val swGuess = findViewById<MaterialSwitch>(R.id.chkGuess)
+        val swSigns = findViewById<MaterialSwitch>(R.id.chkSigns)
+        val swNeighbors = findViewById<MaterialSwitch>(R.id.chkNeighbors)
+        fun subState(on: Boolean) {
+            swSigns.isEnabled = on
+            swNeighbors.isEnabled = on
+            swSigns.alpha = if (on) 1f else 0.4f
+            swNeighbors.alpha = if (on) 1f else 0.4f
+        }
+        swGuess.isChecked = prefs.getBoolean(BridgeService.KEY_GUESS_LIMIT, false)
+        subState(swGuess.isChecked)
+        swGuess.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(BridgeService.KEY_GUESS_LIMIT, checked).apply()
+            subState(checked)
+            applyConfigIfRunning()
+        }
+        for ((id, key, def) in listOf(
+            Triple(R.id.chkTags, BridgeService.KEY_LIM_TAGS, true),
+            Triple(R.id.chkSigns, BridgeService.KEY_LIM_SIGNS, true),
+            Triple(R.id.chkNeighbors, BridgeService.KEY_LIM_NEIGHBORS, true),
+            Triple(R.id.swPreloadMobile, BridgeService.KEY_PRELOAD_MOBILE, false)
+        )) {
+            val sw = findViewById<MaterialSwitch>(id)
+            sw.isChecked = prefs.getBoolean(key, def)
+            sw.setOnCheckedChangeListener { _, checked ->
+                prefs.edit().putBoolean(key, checked).apply()
+                applyConfigIfRunning()
+            }
+        }
+
+        val preloadValues = listOf(0, 10, 25, 50)
+        val sldPre = findViewById<Slider>(R.id.sldPreload)
+        val tvPreName = findViewById<TextView>(R.id.tvPreloadName)
+        fun preUi(i: Int) { tvPreName.text = if (preloadValues[i] == 0) "Aus" else "${preloadValues[i]} km" }
+        val preIdx = preloadValues.indexOf(prefs.getInt(BridgeService.KEY_PRELOAD_KM, BridgeService.DEFAULT_PRELOAD_KM))
+            .takeIf { it >= 0 } ?: 2
+        sldPre.value = preIdx.toFloat()
+        preUi(preIdx)
+        sldPre.addOnChangeListener { _, value, fromUser ->
+            val i = value.toInt().coerceIn(0, 3)
+            preUi(i)
+            if (fromUser) {
+                prefs.edit().putInt(BridgeService.KEY_PRELOAD_KM, preloadValues[i]).apply()
+                applyConfigIfRunning()
+            }
+        }
+
         val toggle = findViewById<MaterialButtonToggleGroup>(R.id.toggleSpeed)
         toggle.check(
             if (prefs.getString(BridgeService.KEY_SPEED_SRC, "gps") == "osmand") R.id.btnSpeedOsmand else R.id.btnSpeedGps
@@ -205,33 +338,6 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putString(
                 BridgeService.KEY_SPEED_SRC, if (id == R.id.btnSpeedOsmand) "osmand" else "gps"
             ).apply()
-            applyConfigIfRunning()
-        }
-
-        val chips = findViewById<ChipGroup>(R.id.chipsThreshold)
-        val hint = findViewById<TextView>(R.id.tvThresholdHint)
-        val modes = mapOf(
-            R.id.chipAlways to ThresholdMode.ALWAYS,
-            R.id.chipShort to ThresholdMode.SHORT,
-            R.id.chipNormal to ThresholdMode.NORMAL,
-            R.id.chipLong to ThresholdMode.LONG,
-            R.id.chipOneKm to ThresholdMode.ONE_KM
-        )
-        fun describe(m: ThresholdMode) = when (m) {
-            ThresholdMode.ALWAYS -> "Der Pfeil steht immer da."
-            ThresholdMode.SHORT -> "Ab 300 m (Limit bis 50), 600 m (bis 100) bzw. 1000 m."
-            ThresholdMode.NORMAL -> "Ab 500 m (Limit bis 50), 1000 m (bis 100) bzw. 2000 m."
-            ThresholdMode.LONG -> "Ab 800 m (Limit bis 50), 2000 m (bis 100) bzw. 4000 m."
-            ThresholdMode.ONE_KM -> "Immer erst ab 1 km vor dem Manöver."
-        }
-        val current = ThresholdMode.values().firstOrNull { it.name == prefs.getString(BridgeService.KEY_THRESHOLD, null) }
-            ?: ThresholdMode.ONE_KM
-        chips.check(modes.entries.first { it.value == current }.key)
-        hint.text = describe(current)
-        chips.setOnCheckedStateChangeListener { _, ids ->
-            val m = ids.firstOrNull()?.let { modes[it] } ?: return@setOnCheckedStateChangeListener
-            prefs.edit().putString(BridgeService.KEY_THRESHOLD, m.name).apply()
-            hint.text = describe(m)
             applyConfigIfRunning()
         }
     }
@@ -247,10 +353,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupTools() {
         findViewById<MaterialButton>(R.id.btnClear).setOnClickListener { command(BridgeService.ACTION_CLEAR) }
-        findViewById<MaterialButton>(R.id.btnNotif).setOnClickListener {
+        findViewById<MaterialSwitch>(R.id.swNotifAccess).setOnCheckedChangeListener { _, _ ->
+            if (permSyncing) return@setOnCheckedChangeListener
+            // Android erlaubt das Setzen/Entziehen nur dem Nutzer: Systemseite öffnen, Schalter zeigt weiter den echten Zustand
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            syncPermSwitches()
         }
-        findViewById<MaterialButton>(R.id.btnBattery).setOnClickListener { batteryExemption() }
+        findViewById<MaterialSwitch>(R.id.swBattery).setOnCheckedChangeListener { _, on ->
+            if (permSyncing) return@setOnCheckedChangeListener
+            if (on) batteryExemption() else startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            syncPermSwitches()
+        }
         findViewById<MaterialButton>(R.id.btnLog).setOnClickListener { shareLog() }
         findViewById<MaterialButton>(R.id.btnLogClear).setOnClickListener {
             BridgeBus.clearLog()
@@ -285,11 +398,31 @@ class MainActivity : AppCompatActivity() {
         } else if (running) {
             "Läuft auch bei ausgeschaltetem Display."
         } else {
-            "Tippe auf Start, um das HUD zu verbinden."
+            "Schalte \"HUD verbinden\" ein, um das HUD zu verbinden."
         }
-        tvGps.text = BridgeBus.gps
-        tvLimit.text = BridgeBus.limit
-        tvOsm.text = BridgeBus.osm
+        findViewById<TextView>(R.id.tvPreloadStatus).text = if (BridgeService.running) BridgeBus.preload else "Der Dienst läuft nicht (Start: Übersicht)"
+        syncPermSwitches()
+        val swJust = findViewById<MaterialSwitch>(R.id.swJustage)
+        val justOn = prefs.getBoolean(BridgeService.KEY_JUSTAGE, false)
+        if (swJust.isChecked != justOn) { justageSyncing = true; swJust.isChecked = justOn; justageSyncing = false }
+        val swService = findViewById<MaterialSwitch>(R.id.swService)
+        if (swService.isChecked != running) { serviceSyncing = true; swService.isChecked = running; serviceSyncing = false }
+        fun plain(t: String) = t.substringAfter(": ", t)
+        tvGps.text = plain(BridgeBus.gps)
+        tvLimit.text = plain(BridgeBus.limit)
+        tvOsm.text = plain(BridgeBus.osm)
+        val limRaw = BridgeBus.limit
+        val limKmh = Regex("(\\d+) km/h").find(limRaw)?.groupValues?.get(1)
+        val tvSignValue = findViewById<TextView>(R.id.tvSignValue)
+        tvSignValue.text = limKmh ?: "–"
+        findViewById<TextView>(R.id.tvSignSource).text = when {
+            limKmh == null -> if (limRaw.contains("unbekannt")) "Unbekannt" else plain(limRaw)
+            limRaw.contains("geschätzt") -> "Geschätzt, nicht aus den Kartendaten"
+            else -> "Aus den Kartendaten (OSM)"
+        }
+        val spd = Regex("Tempo: (\\d+) km/h").find(BridgeBus.gps)?.groupValues?.get(1)
+        findViewById<TextView>(R.id.tvSignSpeed).text = "Tempo: " + (spd?.let { "$it km/h" } ?: "–")
+        findViewById<TextView>(R.id.tvLogHome).text = BridgeBus.lastLines(3).ifBlank { "–" }
         tvLog.text = BridgeBus.lastLines(25)
     }
 
@@ -298,7 +431,6 @@ class MainActivity : AppCompatActivity() {
     /** Startet den Dienst von selbst, solange die App offen ist (HudClient verbindet, sobald das HUD an ist). */
     private fun autoConnect() {
         if (!prefs.getBoolean(BridgeService.KEY_ENABLED, true)) return
-        if (!prefs.getBoolean(BridgeService.KEY_AUTO, true)) return
         if (BridgeService.running || BridgeService.userStopped) return
         if (prefs.getString(BridgeService.KEY_ADDR, null) == null) return
         val needed = buildList {
@@ -382,15 +514,30 @@ class MainActivity : AppCompatActivity() {
         BridgeService.send(this, action)
     }
 
+    private var permSyncing = false
+
+    private fun notifAccessGranted(): Boolean =
+        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+
+    private fun batteryIgnored(): Boolean =
+        getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true
+
+    /** Setzt die beiden Schalter auf den echten Zustand der Berechtigungen. */
+    private fun syncPermSwitches() {
+        val sn = findViewById<MaterialSwitch>(R.id.swNotifAccess)
+        val sb = findViewById<MaterialSwitch>(R.id.swBattery)
+        permSyncing = true
+        try {
+            val n = try { notifAccessGranted() } catch (_: Exception) { false }
+            if (sn.isChecked != n) sn.isChecked = n
+            val b = try { batteryIgnored() } catch (_: Exception) { false }
+            if (sb.isChecked != b) sb.isChecked = b
+        } finally { permSyncing = false }
+    }
+
     private fun batteryExemption() {
-        val pm = getSystemService(PowerManager::class.java)
-        if (pm.isIgnoringBatteryOptimizations(packageName)) {
-            Toast.makeText(this, "Bereits von der Akku-Optimierung ausgenommen", Toast.LENGTH_LONG).show()
-        } else {
-            startActivity(
-                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
-            )
-        }
+        if (batteryIgnored()) return
+        startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
     }
 
     private fun shareLog() {
