@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App-Symbol: Bruecke von vorn (drei Boegen) im HUD-Rahmen (Eckklammern), Pfeil darueber. Eigene Zeichnung. Alles im sicheren Bereich r=33 um (54,54). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#00000000" android:strokeColor="#8E8E93" android:strokeAlpha="1.0" android:strokeWidth="3.0" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M32,41V32H41M67,32H76V41M76,67V76H67M41,76H32V67" />
+    <path android:fillColor="#FF7A00" android:pathData="M54.0,35.98L61.02,43.78L56.652,43.78L56.652,50.8L51.348,50.8L51.348,43.78L46.98,43.78Z" />
+    <path android:fillColor="#00000000" android:strokeColor="#FFB866" android:strokeAlpha="1.0" android:strokeWidth="3.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M35,56H73" />
+    <path android:fillColor="#00000000" android:strokeColor="#FF7A00" android:strokeAlpha="1.0" android:strokeWidth="2.6" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M36,56V70M48,56V70M60,56V70M72,56V70" />
+    <path android:fillColor="#00000000" android:strokeColor="#FF7A00" android:strokeAlpha="1.0" android:strokeWidth="2.8" android:strokeLineCap="butt" android:strokeLineJoin="round" android:pathData="M36,66A6,6 0 0 1 48,66M48,66A6,6 0 0 1 60,66M60,66A6,6 0 0 1 72,66" />
+    <path android:fillColor="#00000000" android:strokeColor="#FF7A00" android:strokeAlpha="1.0" android:strokeWidth="2.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M34,70H74" />
+</vector>

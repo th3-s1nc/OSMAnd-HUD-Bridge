@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dunkles Design schlicht: schwarzer Grund, orange Akzent, dunkelgraue Flächen -->
+    <style name="Theme.HudBridge" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">#FF7A00</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="colorPrimaryContainer">#5A2D00</item>
+        <item name="colorOnPrimaryContainer">#FFD9B8</item>
+        <item name="colorSecondaryContainer">#4A2600</item>
+        <item name="colorOnSecondaryContainer">#FFD9B8</item>
+        <item name="android:colorBackground">#000000</item>
+        <item name="colorSurface">#000000</item>
+        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorOnSurfaceVariant">#B8B8BD</item>
+        <item name="colorSurfaceVariant">#2C2C2E</item>
+        <item name="colorOutline">#6E6E73</item>
+        <item name="colorSurfaceContainer">#0B0B0C</item>
+        <item name="colorSurfaceContainerHighest">#1C1C1E</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#0B0B0C</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Widget.HudBridge.Card" parent="Widget.Material3.CardView.Filled">
+        <item name="cardBackgroundColor">#1C1C1E</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+    </style>
+
+    <!-- Dunkelgraue Schaltfläche, weisser Fettdruck in Grossbuchstaben -->
+    <style name="Widget.HudBridge.Button" parent="Widget.Material3.Button.TonalButton">
+        <item name="backgroundTint">#2C2C2E</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="cornerRadius">10dp</item>
+    </style>
+
+    <style name="Widget.HudBridge.Button.Primary" parent="Widget.Material3.Button">
+        <item name="backgroundTint">#FF7A00</item>
+        <item name="android:textColor">#000000</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">true</item>
+        <item name="cornerRadius">10dp</item>
+    </style>
+</resources>

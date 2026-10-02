@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+
+    <TextView
+        style="@style/TextAppearance.Material3.HeadlineSmall"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingTop="12dp"
+        android:paddingEnd="20dp"
+        android:textColor="#FF7A00"
+        android:textStyle="bold"
+        android:text="TILSBERK OSMAND BRIDGE" />
+
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+    <ScrollView android:id="@+id/pageHome" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="visible" android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/dotHud" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="22sp" android:textColor="@color/status_off" />
+                <TextView android:id="@+id/tvHud" style="@style/TextAppearance.Material3.TitleLarge" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="Dienst gestoppt" />
+            </LinearLayout>
+            <TextView android:id="@+id/tvServiceHint" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnStart" style="@style/Widget.HudBridge.Button.Primary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="HUD verbinden / Dienst starten" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnStop" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Dienst beenden" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Live" />
+            <TextView android:id="@+id/tvGps" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tempo: –" />
+            <TextView android:id="@+id/tvLimit" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Limit: –" android:layout_marginTop="6dp" />
+            <TextView android:id="@+id/tvOsm" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="OsmAnd: –" android:layout_marginTop="6dp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView android:id="@+id/pageDisplay" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp" android:text="Anzeigemodus des HUD. Die Auswahl gilt sofort, wird gespeichert und beim nächsten Verbinden wieder gesetzt. Die Vorschau zeigt, welche Elemente der Modus belegt." />
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardNavigator"
+                style="@style/Widget.HudBridge.Card"
+                android:clickable="true" android:focusable="true"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+                    <include layout="@layout/view_preview_navigator" android:layout_width="120dp" android:layout_height="142dp" />
+                    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="14dp">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textStyle="bold" android:text="Navigator" />
+                            <TextView android:id="@+id/cardNavigatorCheck" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FF7A00" android:textStyle="bold" android:text="" />
+                        </LinearLayout>
+                        <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Tempo, Tempolimit, Pfeil, Entfernung, Restweg, Restzeit, Spurassistent und Uhrzeit." />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardMinimalist"
+                style="@style/Widget.HudBridge.Card"
+                android:clickable="true" android:focusable="true"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+                    <include layout="@layout/view_preview_minimalist" android:layout_width="120dp" android:layout_height="142dp" />
+                    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="14dp">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textStyle="bold" android:text="Minimalist" />
+                            <TextView android:id="@+id/cardMinimalistCheck" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FF7A00" android:textStyle="bold" android:text="" />
+                        </LinearLayout>
+                        <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Reduziert: Pfeil, Entfernung, Tempolimit, Restweg, Restzeit und Uhrzeit. Ohne Tempo und Spuren." />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardExplorer"
+                style="@style/Widget.HudBridge.Card"
+                android:clickable="true" android:focusable="true"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+                    <include layout="@layout/view_preview_explorer" android:layout_width="120dp" android:layout_height="142dp" />
+                    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="14dp">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textStyle="bold" android:text="Explorer" />
+                            <TextView android:id="@+id/cardExplorerCheck" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FF7A00" android:textStyle="bold" android:text="" />
+                        </LinearLayout>
+                        <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Kompass, Tempo, Tempolimit, Pfeil, Entfernung, Restweg und Ankunftszeit. Zeigt Anrufe und Nachrichten." />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardCity"
+                style="@style/Widget.HudBridge.Card"
+                android:clickable="true" android:focusable="true"
+                android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:padding="12dp" android:gravity="center_vertical">
+                    <include layout="@layout/view_preview_city" android:layout_width="120dp" android:layout_height="142dp" />
+                    <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="14dp">
+                        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textStyle="bold" android:text="City" />
+                            <TextView android:id="@+id/cardCityCheck" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FF7A00" android:textStyle="bold" android:text="" />
+                        </LinearLayout>
+                        <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Tempo, Tempolimit, Pfeil, Entfernung, Restweg, Restzeit und Straßenname (nächste Straße, sonst aktuelle). Zeigt Anrufe und Nachrichten." />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView android:id="@+id/pageSettings" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Verbindung" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Automatisch verbinden" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Der Dienst startet, sobald die App offen ist, und verbindet das HUD, sobald es eingeschaltet wird." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Meldungen" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Blendet ein Symbol am HUD ein, nur in Explorer und City. Liest die Benachrichtigungen mit (Benachrichtigungszugriff nötig). Nachrichten erscheinen 5 s als Anruf-Symbol, Anrufe bleiben, solange es klingelt." />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeCall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Eingehende Anrufe" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeMsg" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="WhatsApp-Nachrichten" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeName" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Name des Absenders anzeigen" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Datenquellen" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkOsmand" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="OsmAnd-Navigation übernehmen" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Pfeil, Entfernung, Restweg, Restzeit, Ankunftszeit, nächste Straße und Kreisverkehr-Ausfahrt aus OsmAnd. Aus: es wird gar nichts aus OsmAnd übernommen (Tempo und Limit kommen dann aus GPS und OSM; Anrufe und WhatsApp bleiben aktiv)." />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkLimit" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Tempolimit aus OSM-Daten" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Online-Abfrage über Overpass, auch ohne Navigation. Liefert auch den Namen der aktuellen Straße. Ohne Netz bleibt beides leer." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tempo-Quelle" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="GPS des Handys oder das Tempo aus der OsmAnd-Benachrichtigung (nützlich bei Simulationen). Fehlt der OsmAnd-Wert, nutzt die App GPS." />
+            <com.google.android.material.button.MaterialButtonToggleGroup android:id="@+id/toggleSpeed" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" app:singleSelection="true" app:selectionRequired="true">
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnSpeedGps" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="GPS" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/btnSpeedOsmand" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="OsmAnd" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Pfeil anzeigen ab" />
+            <com.google.android.material.chip.ChipGroup android:id="@+id/chipsThreshold" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" app:singleSelection="true" app:selectionRequired="true">
+                <com.google.android.material.chip.Chip android:id="@+id/chipAlways" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Immer" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipShort" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Kurz" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipNormal" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Normal" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipLong" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Lang" />
+                <com.google.android.material.chip.Chip android:id="@+id/chipOneKm" style="@style/Widget.Material3.Chip.Filter" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ab 1 km" />
+            </com.google.android.material.chip.ChipGroup>
+            <TextView android:id="@+id/tvThresholdHint" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView android:id="@+id/pageTools" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Einrichtung" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Beides wird für den Betrieb bei ausgeschaltetem Display bzw. zum Mitlesen von OsmAnd gebraucht." />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnNotif" style="@style/Widget.HudBridge.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Benachrichtigungszugriff öffnen" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnBattery" style="@style/Widget.HudBridge.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Akku-Optimierung ausschalten" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HUD" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Falls nach einer Simulation ein Pfeil oder eine Entfernung hängen bleibt. Der Dienst muss laufen." />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnClear" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Navigationsanzeige leeren" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Protokoll" />
+            <TextView android:id="@+id/tvLog" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:fontFamily="monospace" android:textSize="11sp" android:textIsSelectable="true" android:text="" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnLog" style="@style/Widget.HudBridge.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Log als TXT teilen" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnLogClear" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Log löschen" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </ScrollView>
+    <ScrollView android:id="@+id/pageInfo" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Über diese App" />
+            <TextView android:id="@+id/tvVersion" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="#FF7A00" android:text="" />
+            <TextView android:id="@+id/tvAbout" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:lineSpacingMultiplier="1.1" android:text="" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Haftung" />
+            <TextView android:id="@+id/tvLiability" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:lineSpacingMultiplier="1.1" android:text="" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Daten und Datenschutz" />
+            <TextView android:id="@+id/tvPrivacy" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:lineSpacingMultiplier="1.1" android:text="" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Quellen und Lizenzen" />
+            <TextView android:id="@+id/tvLicenses" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:lineSpacingMultiplier="1.1" android:text="" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+    </ScrollView>
+    </FrameLayout>
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:menu="@menu/bottom_nav" />
+</LinearLayout>
