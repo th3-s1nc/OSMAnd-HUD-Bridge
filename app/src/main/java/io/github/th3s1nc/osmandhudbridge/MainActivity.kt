@@ -100,6 +100,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupHome() {
+        val swMaster = findViewById<MaterialSwitch>(R.id.swMaster)
+        swMaster.isChecked = prefs.getBoolean(BridgeService.KEY_ENABLED, true)
+        swMaster.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(BridgeService.KEY_ENABLED, checked).apply()
+            if (checked) {
+                BridgeService.userStopped = false
+                autoConnect()
+            } else {
+                // Aus: Dienst beenden, Bluetooth, GPS und Netz werden nicht mehr genutzt, das HUD bleibt frei
+                BridgeService.userStopped = true
+                stopService(Intent(this, BridgeService::class.java))
+            }
+            refresh()
+        }
         findViewById<MaterialButton>(R.id.btnStart).setOnClickListener { onStartClicked() }
         findViewById<MaterialButton>(R.id.btnStop).setOnClickListener {
             BridgeService.userStopped = true
@@ -156,6 +170,13 @@ class MainActivity : AppCompatActivity() {
         swAuto.setOnCheckedChangeListener { _, checked ->
             prefs.edit().putBoolean(BridgeService.KEY_AUTO, checked).apply()
             if (checked) autoConnect()
+        }
+
+        val swIdle = findViewById<MaterialSwitch>(R.id.chkIdle)
+        swIdle.isChecked = prefs.getBoolean(BridgeService.KEY_IDLE_STOP, true)
+        swIdle.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(BridgeService.KEY_IDLE_STOP, checked).apply()
+            applyConfigIfRunning()
         }
 
         for ((id, key) in listOf(
@@ -242,7 +263,12 @@ class MainActivity : AppCompatActivity() {
     private fun refresh() {
         val hud = BridgeBus.hud.removePrefix("HUD: ")
         val running = BridgeService.running
-        tvHud.text = if (running) hud.replaceFirstChar { it.uppercase() } else "Dienst gestoppt"
+        val enabled = prefs.getBoolean(BridgeService.KEY_ENABLED, true)
+        tvHud.text = when {
+            !enabled -> "Bridge ausgeschaltet"
+            running -> hud.replaceFirstChar { it.uppercase() }
+            else -> "Dienst gestoppt"
+        }
         dotHud.setTextColor(
             ContextCompat.getColor(
                 this,
@@ -254,7 +280,9 @@ class MainActivity : AppCompatActivity() {
                 }
             )
         )
-        tvServiceHint.text = if (running) {
+        tvServiceHint.text = if (!enabled) {
+            "Die App nutzt weder Bluetooth noch GPS oder Internet. Das HUD ist frei für die Tilsberk-App."
+        } else if (running) {
             "Läuft auch bei ausgeschaltetem Display."
         } else {
             "Tippe auf Start, um das HUD zu verbinden."
@@ -269,6 +297,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Startet den Dienst von selbst, solange die App offen ist (HudClient verbindet, sobald das HUD an ist). */
     private fun autoConnect() {
+        if (!prefs.getBoolean(BridgeService.KEY_ENABLED, true)) return
         if (!prefs.getBoolean(BridgeService.KEY_AUTO, true)) return
         if (BridgeService.running || BridgeService.userStopped) return
         if (prefs.getString(BridgeService.KEY_ADDR, null) == null) return
@@ -281,6 +310,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onStartClicked() {
+        // Ein ausdrücklicher Start schaltet die Bridge wieder ein
+        if (!prefs.getBoolean(BridgeService.KEY_ENABLED, true)) findViewById<MaterialSwitch>(R.id.swMaster).isChecked = true
         val needed = buildList {
             if (Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
             if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)

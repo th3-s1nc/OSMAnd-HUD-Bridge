@@ -4,6 +4,7 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import io.github.th3s1nc.osmandhudbridge.BridgeBus
+import io.github.th3s1nc.osmandhudbridge.BridgeService
 
 /**
  * Liest die Navigations-Benachrichtigung von OsmAnd mit (Restweg, Restzeit, evtl. Ausfahrt).
@@ -21,6 +22,8 @@ class OsmAndNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val n = sbn ?: return
+        // Schalter "Bridge aktiv" aus: Benachrichtigungen werden weder gelesen noch geloggt
+        if (!getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).getBoolean(BridgeService.KEY_ENABLED, true)) return
         if (n.packageName in WHATSAPP_PACKAGES) { handleMessage(n); return }
         if (n.notification.category == Notification.CATEGORY_CALL) { handleCall(n); return }
         if (n.packageName !in OSMAND_PACKAGES) return

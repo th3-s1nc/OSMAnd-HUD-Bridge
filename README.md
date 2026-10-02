@@ -22,6 +22,8 @@ Tested by the author with one HUD on a Xiaomi 10T (LineageOS). Other devices, fi
 
 **Language:** The app's user interface is currently **German only**. The HUD itself shows no app text, only symbols, numbers and street names. An English translation is planned and contributions are welcome (see Contributing).
 
+**Using it next to the original app:** the HUD accepts only one Bluetooth connection at a time. Switch **Bridge active** off (Home tab) before you use the vendor app. While it is off, this app uses no Bluetooth, GPS or network and reads no notifications.
+
 ## Build
 Open the folder in Android Studio (JDK 17, Gradle 8.13 / AGP 8.9.2), or:
 

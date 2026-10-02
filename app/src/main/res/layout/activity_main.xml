@@ -15,11 +15,22 @@
         android:paddingEnd="20dp"
         android:textColor="#FF7A00"
         android:textStyle="bold"
-        android:text="TILSBERK OSMAND BRIDGE" />
+        android:text="OSMAnd HUD Bridge" />
 
     <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
     <ScrollView android:id="@+id/pageHome" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="visible" android:clipToPadding="false">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/tvMasterTitle" style="@style/TextAppearance.Material3.TitleLarge" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Bridge aktiv" />
+                <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swMaster" android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" android:contentDescription="Bridge aktiv" />
+            </LinearLayout>
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Ausschalten, wenn du die Tilsberk-App nutzt: Dann bleibt das HUD für sie frei und diese App tut nichts." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
     <com.google.android.material.card.MaterialCardView
         style="@style/Widget.HudBridge.Card"
         android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
@@ -123,6 +134,8 @@
             <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Verbindung" />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkAuto" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Automatisch verbinden" />
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Der Dienst startet, sobald die App offen ist, und verbindet das HUD, sobald es eingeschaltet wird." />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkIdle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:checked="true" android:text="Dienst automatisch beenden" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Beendet den Dienst, wenn das HUD 10 Minuten lang nicht verbunden war. Beim nächsten Öffnen der App startet er wieder." />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
     <com.google.android.material.card.MaterialCardView

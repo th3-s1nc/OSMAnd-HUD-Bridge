@@ -53,6 +53,8 @@ class BridgeService : Service(), HudClient.Listener {
     private var notifNavActive = false
     private var lastGpsKmh = 0f
     private var lastOsmKmh = 0
+    private var idleStopEnabled = true
+    private var idleSince = 0L
     private var lastOsmAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -62,6 +64,13 @@ class BridgeService : Service(), HudClient.Listener {
         if (intent?.action == ACTION_STOP) {
             // "Beenden" per Benachrichtigung: Auto-Verbinden bleibt aus, bis der Nutzer selbst wieder startet
             userStopped = true
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_ENABLED, true)) {
+            // Schalter "Bridge aktiv" ist aus: nichts starten (auch nicht nach einem Neustart durch das System).
+            // Nach startForegroundService ist startForeground Pflicht, sonst stürzt die App ab.
+            if (intent != null) enterForeground()
             stopSelf()
             return START_NOT_STICKY
         }
@@ -177,6 +186,7 @@ class BridgeService : Service(), HudClient.Listener {
 
     private val ticker = object : Runnable {
         override fun run() {
+            if (checkIdle()) return
             controller.tick()
             if (speedFromOsmand && !osmSpeedFresh()) controller.setSpeed(lastGpsKmh)
             if (locMgr != null && lastFixAt != 0L &&
@@ -186,6 +196,17 @@ class BridgeService : Service(), HudClient.Listener {
             }
             handler.postDelayed(this, 1000)
         }
+    }
+
+    /** Beendet den Dienst, wenn das HUD lange nicht verbunden war. Gibt true zurück, wenn beendet wurde. */
+    private fun checkIdle(): Boolean {
+        if (client.isReady) { idleSince = 0L; return false }
+        val now = SystemClock.elapsedRealtime()
+        if (idleSince == 0L) { idleSince = now; return false }
+        if (!idleStopEnabled || now - idleSince < IDLE_STOP_MS) return false
+        BridgeBus.log("HUD seit ${IDLE_STOP_MS / 60_000} Minuten nicht verbunden -> Dienst beendet (in den Einstellungen abschaltbar)")
+        stopSelf()
+        return true
     }
 
     private val btReceiver = object : BroadcastReceiver() {
@@ -284,6 +305,7 @@ class BridgeService : Service(), HudClient.Listener {
         val sp = getSharedPreferences(PREFS, MODE_PRIVATE)
         speedFromOsmand = sp.getString(KEY_SPEED_SRC, "gps") == "osmand"
         limitProvider.enabled = sp.getBoolean(KEY_OSM_LIMIT, true)
+        idleStopEnabled = sp.getBoolean(KEY_IDLE_STOP, true)
         controller.setMode(io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(sp.getString(KEY_MODE, null)))
         val thr = sp.getString(KEY_THRESHOLD, null)
         controller.threshold = io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode.values()
@@ -373,6 +395,9 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_NOTICE_MSG = "notice_msg"
         const val KEY_NOTICE_NAME = "notice_name"
         const val KEY_AUTO = "auto_connect"
+        const val KEY_ENABLED = "bridge_enabled"
+        const val KEY_IDLE_STOP = "idle_stop"
+        private const val IDLE_STOP_MS = 10 * 60 * 1000L
         private const val CHANNEL = "bridge"
         private const val NOTIF_ID = 1
         private const val AIDL_SILENT_MS = 6_000L

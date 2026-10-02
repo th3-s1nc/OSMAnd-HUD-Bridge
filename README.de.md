@@ -22,6 +22,8 @@ Vom Autor mit einem HUD auf einem Xiaomi 10T (LineageOS) getestet. Andere Gerät
 
 **Sprache:** Die Oberfläche der App ist derzeit **nur auf Deutsch**. Das HUD selbst zeigt keine App-Texte, nur Symbole, Zahlen und Straßennamen. Eine englische Übersetzung ist geplant, Beiträge sind willkommen.
 
+**Neben der Original-App nutzen:** Das HUD akzeptiert nur eine Bluetooth-Verbindung gleichzeitig. Schalte **Bridge aktiv** (Reiter Start) aus, bevor du die Hersteller-App benutzt. Solange er aus ist, nutzt diese App weder Bluetooth noch GPS oder Netz und liest keine Benachrichtigungen.
+
 ## Bauen
 Ordner in Android Studio öffnen (JDK 17, Gradle 8.13 / AGP 8.9.2) oder:
 
