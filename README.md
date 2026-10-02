@@ -37,6 +37,11 @@ The protocol and parser logic have unit tests (`HudProtocolTest`, `OsmAndNotific
 3. Tap *Disable battery optimization* and grant notification access (Tools tab).
 4. Start navigation in OsmAnd.
 
+## Troubleshooting (installing the APK)
+- **"App blocked to protect your device" (Google Play Protect):** tap *More details*, then *Install anyway*. Play Protect does not know the signing key of this open-source app yet.
+- **Notification access is greyed out ("Restricted setting"):** Android 13+ blocks this for apps installed from a file or browser. Open *Settings → Apps → OsmAnd HUD Bridge*, tap the **⋮ menu** (top right), choose **Allow restricted settings**, confirm, then enable notification access. If the menu is missing, tap the greyed-out switch once and look again. Menu names vary by manufacturer.
+- **No data from OsmAnd:** enable this app in OsmAnd under *Connected apps* (again after every reinstall under a new signature).
+
 ## Privacy
 - Notifications from OsmAnd, WhatsApp and phone calls are read only to show them on the HUD. Nothing is stored or sent anywhere.
 - For street names and speed limits the approximate position is sent to an Overpass server (OpenStreetMap). This can be switched off (Settings → Data sources).

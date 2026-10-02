@@ -37,6 +37,11 @@ Protokoll und Parser haben Unit-Tests (`HudProtocolTest`, `OsmAndNotificationPar
 3. "Akku-Optimierung ausschalten" tippen und den Benachrichtigungszugriff erlauben (Reiter Werkzeuge).
 4. Navigation in OsmAnd starten.
 
+## Fehlerbehebung (APK installieren)
+- **„App wurde zum Schutz deines Geräts blockiert" (Google Play Protect):** *Weitere Details* antippen, dann *Trotzdem installieren*. Play Protect kennt den Signaturschlüssel dieser Open-Source-App noch nicht.
+- **Benachrichtigungszugriff ausgegraut („Eingeschränkte Einstellung"):** Ab Android 13 ist das für Apps gesperrt, die per Datei oder Browser installiert wurden. *Einstellungen → Apps → OsmAnd HUD Bridge* öffnen, oben rechts das **⋮-Menü** antippen, **Eingeschränkte Einstellungen zulassen** wählen und bestätigen, danach den Benachrichtigungszugriff einschalten. Fehlt das Menü, den ausgegrauten Schalter einmal antippen und erneut nachsehen. Menünamen unterscheiden sich je nach Hersteller.
+- **Keine Daten von OsmAnd:** Die App in OsmAnd unter *Verbundene Apps* aktivieren (nach jeder Neuinstallation mit anderer Signatur erneut).
+
 ## Datenschutz
 - Benachrichtigungen von OsmAnd, WhatsApp und Anrufen werden nur gelesen, um sie am HUD anzuzeigen. Nichts wird gespeichert oder gesendet.
 - Für Straßennamen und Tempolimits wird die ungefähre Position an einen Overpass-Server (OpenStreetMap) gesendet. Abschaltbar unter Einstellungen → Datenquellen.
