@@ -20,6 +20,8 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 
 Vom Autor mit einem HUD auf einem Xiaomi 10T (LineageOS) getestet. Andere Geräte, Firmwarestände und Android-Versionen sind ungetestet.
 
+**Sprache:** Die Oberfläche der App ist derzeit **nur auf Deutsch**. Das HUD selbst zeigt keine App-Texte, nur Symbole, Zahlen und Straßennamen. Eine englische Übersetzung ist geplant, Beiträge sind willkommen.
+
 ## Bauen
 Ordner in Android Studio öffnen (JDK 17, Gradle 8.13 / AGP 8.9.2) oder:
 
@@ -47,4 +49,4 @@ Das Bluetooth-Protokoll, soweit bekannt, steht in [PROTOCOL.md](PROTOCOL.md) (en
 MIT für den eigenen Code ([LICENSE](LICENSE)). Fremde Bestandteile und Hinweise: [NOTICE.md](NOTICE.md). Kartendaten © OpenStreetMap-Mitwirkende (ODbL).
 
 ## Mitmachen
-Issues und Pull Requests sind willkommen: Tests mit anderer HUD-Firmware, andere Navi-Apps, Übersetzungen.
+Issues und Pull Requests sind willkommen: Tests mit anderer HUD-Firmware, andere Navi-Apps, **Übersetzungen (zuerst eine englische Oberfläche)**.

@@ -20,6 +20,8 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 
 Tested by the author with one HUD on a Xiaomi 10T (LineageOS). Other devices, firmware versions and Android versions are untested.
 
+**Language:** The app's user interface is currently **German only**. The HUD itself shows no app text, only symbols, numbers and street names. An English translation is planned and contributions are welcome (see Contributing).
+
 ## Build
 Open the folder in Android Studio (JDK 17, Gradle 8.13 / AGP 8.9.2), or:
 
@@ -47,4 +49,4 @@ See [PROTOCOL.md](PROTOCOL.md) for the Bluetooth protocol as far as it is known.
 MIT for this project's own code (see [LICENSE](LICENSE)). Third-party parts and notes: [NOTICE.md](NOTICE.md). Map data © OpenStreetMap contributors (ODbL).
 
 ## Contributing
-Issues and pull requests are welcome, especially: tests with other HUD firmware, other navigation apps, translations.
+Issues and pull requests are welcome, especially: tests with other HUD firmware, other navigation apps, and **translations (English UI first)**.
