@@ -7,6 +7,7 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 > **Keine Verbindung** zu Tilsberk, Digades oder OSMAnd. Alle Produktnamen und Marken gehören ihren Inhabern und dienen nur der Beschreibung der Kompatibilität. **Keine Gewähr.** Die Anzeige kann ausfallen oder falsch sein. Verlass dich beim Fahren nicht darauf, Verkehrsschilder und -regeln haben Vorrang. Nutzung auf eigene Gefahr.
 
 ## Was die App tut
+- **Freies Fahren ohne Navigation:** Auch ohne Ziel zeigt das HUD das aktuelle Tempolimit und den Straßennamen, soweit in OpenStreetMap vorhanden. Das Original-HUD zeigt das nur bei aktiver Navigation.
 - Zeigt am HUD Tempo, Tempolimit (aus OpenStreetMap), Abbiegepfeil und Entfernung, Restweg, Restzeit und Ankunft, nächste und aktuelle Straße, Kompass sowie eingehende Anrufe, WhatsApp-Nachrichten und auf Wunsch den laufenden Musiktitel (Interpret, dann Titel, je 19 Zeichen, nur Explorer und City).
 - Vier Anzeigemodi (Navigator, Minimalist, Explorer, City), in der App wählbar und gespeichert.
 - Läuft als Vordergrunddienst auch bei ausgeschaltetem Display, verbindet sich selbst neu und zeigt lieber nichts als etwas Falsches.

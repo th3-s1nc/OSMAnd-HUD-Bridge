@@ -7,6 +7,7 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 > **Not affiliated** with Tilsberk, Digades or OSMAnd. All product names and trademarks belong to their owners and are used only to describe compatibility. **No warranty.** The display can fail or be wrong. Do not rely on it while riding; traffic signs and rules always take precedence. Use at your own risk.
 
 ## What it does
+- **Free riding without navigation:** even without a destination the HUD shows the current speed limit and street name, where OpenStreetMap has them. The original setup only shows this during active navigation.
 - Shows speed, speed limit (from OpenStreetMap), turn arrow and distance, remaining distance / time / arrival, next and current street, compass, incoming call / WhatsApp notices and, optionally, the current music track (artist, then title, 19 characters each, Explorer and City only) on the HUD.
 - Four display modes (Navigator, Minimalist, Explorer, City), selectable in the app, remembered between runs.
 - Runs as a foreground service, works with the screen off, reconnects automatically, shows nothing rather than something wrong.
