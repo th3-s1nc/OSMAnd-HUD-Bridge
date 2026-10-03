@@ -33,6 +33,14 @@ class HudController(private val client: HudClient) {
     private var rate = 0f // Meter pro Sekunde, aus den letzten beiden Meldungen
     var threshold: ThresholdMode = ThresholdMode.NORMAL
 
+    /** Zwischen den Abbiegungen dauerhaft den Geradeaus-Pfeil zeigen (ohne Distanz), solange OSMAnd frische Daten liefert. */
+    var keepStraight = false
+        set(v) {
+            if (field == v) return
+            field = v
+            flush()
+        }
+
     var mode: DisplayMode = DisplayMode.NAVIGATOR
         private set
 
@@ -143,6 +151,8 @@ class HudController(private val client: HudClient) {
         extrapolate: Boolean = false
     ) {
         val now = SystemClock.elapsedRealtime()
+        // Zielflagge läuft noch: späte OSMAnd-Meldungen dürfen sie nicht überschreiben
+        if (want.command == NavCommand.GOAL && navDeadline != 0L && now < navDeadline) return
         val prev = refMeters
         if (extrapolate && meters != null && command != null) {
             if (prev != null && command == refCommand) {
@@ -337,7 +347,9 @@ class HudController(private val client: HudClient) {
         val d = w.partDistanceM
         val s = w.copy(hour = cal.get(Calendar.HOUR_OF_DAY), minute = cal.get(Calendar.MINUTE), roundaboutExit = exit)
         return if (d != null && threshold.isOver(w.speedLimitKmh, d)) {
-            s.copy(partDistanceM = null, command = null, roundaboutExit = null, lanes = emptyList())
+            // Ziel- und Zwischenziel-Symbol haben keine Distanz und kommen hier nie an; nur echte Manöver werden ersetzt
+            if (keepStraight && w.command != null) s.copy(partDistanceM = null, command = NavCommand.STRAIGHT, roundaboutExit = null, lanes = emptyList())
+            else s.copy(partDistanceM = null, command = null, roundaboutExit = null, lanes = emptyList())
         } else s
     }
 

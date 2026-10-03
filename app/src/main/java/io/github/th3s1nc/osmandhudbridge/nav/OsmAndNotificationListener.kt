@@ -16,8 +16,14 @@ class OsmAndNotificationListener : NotificationListenerService() {
     private var last = ""
 
     override fun onListenerConnected() {
+        connected = true
         BridgeBus.init(applicationContext)
         BridgeBus.log("Benachrichtigungszugriff aktiv")
+    }
+
+    override fun onListenerDisconnected() {
+        connected = false
+        BridgeBus.log("Benachrichtigungszugriff getrennt")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -102,9 +108,12 @@ class OsmAndNotificationListener : NotificationListenerService() {
         }
     }
 
-    private companion object {
-        val OSMAND_PACKAGES = setOf("net.osmand", "net.osmand.plus", "net.osmand.dev")
-        val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+    companion object {
+        /** true, solange Android die Benachrichtigungen an diese App liefert (nach einem Update oft erst nach neuem Verbinden). */
+        @Volatile var connected = false
+
+        private val OSMAND_PACKAGES = setOf("net.osmand", "net.osmand.plus", "net.osmand.dev")
+        private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
     }
 }
 

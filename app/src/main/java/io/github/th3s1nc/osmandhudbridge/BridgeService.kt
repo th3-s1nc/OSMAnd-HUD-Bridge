@@ -144,6 +144,7 @@ class BridgeService : Service(), HudClient.Listener {
             acquire()
         }
         BridgeBus.log("Dienst gestartet" + (if (hudWanted(prefs)) ", HUD ${prefs.getString(KEY_NAME, null) ?: "?"}" else ", ohne HUD"))
+        checkNotificationAccess()
         io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationBus.listener = { info ->
             handler.post {
                 if (!useOsmand) return@post // Schalter "OSMAnd-Navigation übernehmen" aus: gar nichts aus OSMAnd
@@ -395,6 +396,28 @@ class BridgeService : Service(), HudClient.Listener {
         controller.showNotice(call, n.name, n.clear)
     }
 
+    /**
+     * Nach einem App-Update bindet Android den Benachrichtigungszugriff oft nicht neu, obwohl der Schalter "an" zeigt.
+     * Darum beim Start neues Verbinden anfordern und nach 10 s prüfen; sonst eine klare Warnung ins Protokoll.
+     */
+    private fun checkNotificationAccess() {
+        val cn = android.content.ComponentName(this, io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener::class.java)
+        val granted = try {
+            androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+        } catch (_: Exception) { false }
+        if (granted && !io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.connected) {
+            try { android.service.notification.NotificationListenerService.requestRebind(cn) } catch (_: Exception) {}
+        }
+        handler.postDelayed({
+            if (io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.connected) return@postDelayed
+            BridgeBus.log(
+                if (granted) "Warnung: Benachrichtigungszugriff ist erlaubt, aber nicht verbunden. Tempo, Restzeit und Ankunft aus OSMAnd fehlen. " +
+                    "In den Android-Einstellungen den Zugriff für diese App einmal aus- und wieder einschalten"
+                else "Hinweis: Benachrichtigungszugriff ist nicht erlaubt. Tempo, Restzeit und Ankunft aus OSMAnd fehlen"
+            )
+        }, 10_000)
+    }
+
     private fun osmSpeedFresh() = SystemClock.elapsedRealtime() - lastOsmAt < 5_000
 
     private fun onOsmandSpeed(kmh: Int) {
@@ -411,6 +434,7 @@ class BridgeService : Service(), HudClient.Listener {
         applyHud()
         if (stopping) return
         speedFromOsmand = sp.getString(KEY_SPEED_SRC, "gps") == "osmand"
+        controller.keepStraight = sp.getBoolean(KEY_KEEP_STRAIGHT, false)
         limitProvider.guessMissing = sp.getBoolean(KEY_GUESS_LIMIT, false)
         limitProvider.useExtraTags = sp.getBoolean(KEY_LIM_TAGS, true)
         limitProvider.useNeighbors = sp.getBoolean(KEY_LIM_NEIGHBORS, true)
@@ -540,6 +564,7 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_MODE = "display_mode"
         const val KEY_NOTICE_CALL = "notice_call"
         const val KEY_NOTICE_MSG = "notice_msg"
+        const val KEY_KEEP_STRAIGHT = "keep_straight" // Geradeaus-Pfeil dauerhaft
         const val KEY_NOTICE_MUSIC = "notice_music" // Spotify: neuer Titel am HUD
         const val KEY_ENABLED = "bridge_enabled"
         const val KEY_GUESS_LIMIT = "guess_limit"

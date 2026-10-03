@@ -2,6 +2,22 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.35
+- Neu: Quadratischer Knopf mit Navigationspfeil rechts neben dem Status ("Verbunden und bereit") auf der Übersicht. Ein Tipp öffnet OSMAnd. Ist OSMAnd nicht installiert, erscheint eine kurze Meldung.
+
+## v0.11.34
+- Build-Fehler behoben ("Only one companion object is allowed per class" in der Benachrichtigungs-Klasse). Keine neue Funktion, v0.11.33 ist damit gebaut lauffähig.
+
+## v0.11.33
+- Neu: Schalter "Geradeaus-Pfeil dauerhaft" (Reiter Anzeige, Karte Navigationsanweisung, standardmäßig aus). Solange die Navigation läuft, zeigt das HUD zwischen den Abbiegungen einen Geradeaus-Pfeil ohne Distanz, bis die nächste Abbiegung nah genug ist. Hört OSMAnd auf zu melden (nach 10 s) oder ist das Ziel erreicht, verschwindet er.
+- Späte OSMAnd-Meldungen überschreiben die Zielflagge nicht mehr.
+
+## v0.11.32
+- Vorschau Explorer: Der Platzhalter "Hauptstraße" ist weg, denn im Modus Explorer sendet die App keinen Straßennamen. README nennt jetzt, in welchen Modi was erscheint.
+
+## v0.11.31
+- Nach einem App-Update las die App die OSMAnd-Benachrichtigung nicht mehr (km/h, Gesamtstrecke, Restzeit, Ankunft fehlten), obwohl der Benachrichtigungszugriff "an" zeigte. Die App fordert die Verbindung jetzt beim Start selbst neu an und schreibt nach 10 s eine Warnzeile ins Protokoll, falls sie trotzdem nicht verbunden ist. Neu im Protokoll: "Benachrichtigungszugriff getrennt".
+
 ## v0.11.30
 - Musik am HUD: Selbstausblendung des HUD jetzt 9 s (genau die Dauer der Anzeige), damit sich beim Weiterschalten Titel nicht überschneiden.
 

@@ -52,6 +52,7 @@ class MainActivity : AppCompatActivity() {
 
         tvHud = findViewById(R.id.tvHud)
         dotHud = findViewById(R.id.dotHud)
+        findViewById<View>(R.id.btnOpenOsmand).setOnClickListener { openOsmand() }
         tvServiceHint = findViewById(R.id.tvServiceHint)
         tvGps = findViewById(R.id.tvGps)
         tvLimit = findViewById(R.id.tvLimit)
@@ -252,6 +253,18 @@ class MainActivity : AppCompatActivity() {
     private var justageSyncing = false
     private var serviceSyncing = false
 
+    /** Startet OSMAnd (Play-Store-, F-Droid- oder Entwickler-Version, was installiert ist). */
+    private fun openOsmand() {
+        for (pkg in listOf("net.osmand.plus", "net.osmand", "net.osmand.dev")) {
+            val i = packageManager.getLaunchIntentForPackage(pkg) ?: continue
+            try {
+                startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return
+            } catch (_: Exception) { }
+        }
+        Toast.makeText(this, "OSMAnd ist nicht installiert", Toast.LENGTH_SHORT).show()
+    }
+
     private fun applyConfigIfRunning() {
         if (BridgeService.running) BridgeService.send(this, BridgeService.ACTION_CONFIG)
     }
@@ -426,6 +439,12 @@ class MainActivity : AppCompatActivity() {
             val sw = findViewById<MaterialSwitch>(id)
             sw.isChecked = prefs.getBoolean(key, true)
             sw.setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(key, checked).apply() }
+        }
+        val swStraight = findViewById<MaterialSwitch>(R.id.chkKeepStraight)
+        swStraight.isChecked = prefs.getBoolean(BridgeService.KEY_KEEP_STRAIGHT, false)
+        swStraight.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(BridgeService.KEY_KEEP_STRAIGHT, checked).apply()
+            applyConfigIfRunning()
         }
         val swMusic = findViewById<MaterialSwitch>(R.id.chkNoticeMusic)
         swMusic.isChecked = prefs.getBoolean(BridgeService.KEY_NOTICE_MUSIC, false)

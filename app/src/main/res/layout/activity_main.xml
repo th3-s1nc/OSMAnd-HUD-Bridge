@@ -27,6 +27,7 @@
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
                 <TextView android:id="@+id/dotHud" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="30sp" android:textColor="@color/status_off" />
                 <TextView android:id="@+id/tvHud" style="@style/TextAppearance.Material3.HeadlineSmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:textStyle="bold" android:text="HUD nicht verbunden" />
+                <ImageButton android:id="@+id/btnOpenOsmand" android:layout_width="48dp" android:layout_height="48dp" android:layout_marginStart="8dp" android:background="@drawable/bg_osmand_btn" android:src="@drawable/ic_navigate" android:padding="11dp" android:scaleType="fitCenter" android:contentDescription="OSMAnd öffnen" />
             </LinearLayout>
             <TextView android:id="@+id/tvServiceHint" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="" />
             <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="16dp" android:layout_marginBottom="12dp" android:background="?attr/colorOutlineVariant" />
@@ -159,6 +160,8 @@
                         </LinearLayout>
                     </LinearLayout>
                     <TextView android:id="@+id/tvThrAlways" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:visibility="gone" android:text="Der Pfeil ist immer sichtbar, egal wie weit das Abbiegen noch entfernt ist." />
+                    <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkKeepStraight" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:checked="false" android:text="Geradeaus-Pfeil dauerhaft" />
+                    <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Solange die Navigation läuft, zeigt das HUD einen Geradeaus-Pfeil, bis die nächste Abbiegung nah genug ist. Hört OSMAnd auf zu melden oder ist das Ziel erreicht, verschwindet er." />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
     <com.google.android.material.card.MaterialCardView
