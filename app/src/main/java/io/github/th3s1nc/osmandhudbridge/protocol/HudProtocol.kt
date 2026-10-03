@@ -184,8 +184,8 @@ object HudProtocol {
      * Anruf-/SMS-Ereignis (Felder 21/22): state 1 = eingehend/empfangen, 2 = aktiv (nur Anruf), Name höchstens 19 Zeichen ASCII,
      * autoHideS = Sekunden bis das HUD die Meldung selbst ausblendet. Format abgeleitet, Anruf am HUD bestätigt, SMS-Meldung wird nicht angezeigt.
      */
-    fun eventField(field: Int, state: Int, name: String?, autoHideS: Int): ByteArray {
-        val n = name?.let { cleanAscii(it).take(19) }?.takeIf { it.isNotEmpty() }
+    fun eventField(field: Int, state: Int, name: String?, autoHideS: Int, maxChars: Int = 19): ByteArray {
+        val n = name?.let { cleanAscii(it).take(maxChars) }?.takeIf { it.isNotEmpty() }
         return Protobuf.message(
             field,
             Protobuf.uint(1, state),

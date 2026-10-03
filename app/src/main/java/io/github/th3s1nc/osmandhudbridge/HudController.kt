@@ -166,6 +166,10 @@ class HudController(private val client: HudClient) {
 
     private var callClearAt = 0L
     private var msgClearAt = 0L
+    private var musicPhase = 0 // 0 aus, 2 Interpret läuft, 3 Pause, 4 Titel läuft
+    private var musicNextAt = 0L
+    private var musicArtist = ""
+    private var musicTitle = ""
     private var callActive = false
 
     /**
@@ -189,11 +193,72 @@ class HudController(private val client: HudClient) {
             return
         }
         if (!call && callActive) return // laufender Anruf hat Vorrang
+        musicPhase = 0 // Meldung oder Anruf ersetzt den Titel
         val hideS = if (call) CALL_MAX_S else MSG_SHOW_S
         client.send(listOf(HudMessage(HudProtocol.eventField(field, 1, name, hideS))))
         val until = SystemClock.elapsedRealtime() + hideS * 1000L
         if (call) { callActive = true; callClearAt = until } else msgClearAt = until
         BridgeBus.log(if (call) "HUD: Anruf angezeigt" else "HUD: Nachricht angezeigt")
+    }
+
+    /**
+     * Neuer Musiktitel: im Meldungsfeld des HUD, dort wo auch Anrufe und Nachrichten erscheinen (nur Explorer und City,
+     * nicht während eines Anrufs). Das HUD scrollt nicht und verträgt höchstens 19 Zeichen (mehr ließ es einfrieren).
+     * Deshalb nacheinander: Interpret 4 s, 1 s leer, Titel 4 s. [tick] steuert den Ablauf.
+     */
+    fun showMusic(artist: String?, title: String) {
+        if (!client.isReady) return
+        if (!mode.supportsEvents) {
+            BridgeBus.log("Titel nicht angezeigt: Modus ${mode.title} hat keinen Platz dafür (nur Explorer/City)")
+            return
+        }
+        if (callActive) return
+        musicArtist = HudProtocol.cleanAscii(artist ?: "").take(MUSIC_MAX_CHARS)
+        musicTitle = HudProtocol.cleanAscii(title).take(MUSIC_MAX_CHARS)
+        if (musicArtist.isEmpty() && musicTitle.isEmpty()) return // nur Zeichen, die das HUD nicht darstellt
+        BridgeBus.log("HUD: Titel angezeigt (Interpret: $musicArtist, Titel: $musicTitle)")
+        if (musicArtist.isNotEmpty()) {
+            sendMusicText(musicArtist)
+            musicPhase = 2
+        } else {
+            sendMusicText(musicTitle)
+            musicPhase = 4
+        }
+        musicNextAt = SystemClock.elapsedRealtime() + MUSIC_PART_S * 1000L
+    }
+
+    private fun sendMusicText(text: String) {
+        client.send(listOf(HudMessage(HudProtocol.eventField(HudProtocol.F_CALL_EVENT, 1, text, MUSIC_HUD_HIDE_S, MUSIC_MAX_CHARS))))
+    }
+
+    /** Nächster Schritt der Musik-Anzeige (wird von [tick] aufgerufen). */
+    private fun musicStep(now: Long) {
+        if (musicPhase == 0 || now < musicNextAt) return
+        if (callActive || !client.isReady) { musicPhase = 0; return }
+        when (musicPhase) {
+            2 -> { // Interpret weg, kurze Pause
+                client.send(listOf(HudMessage(HudProtocol.clearEventBody(HudProtocol.F_CALL_EVENT))))
+                musicPhase = if (musicTitle.isNotEmpty()) 3 else 0
+                musicNextAt = now + MUSIC_GAP_MS
+            }
+            3 -> { // Titel
+                sendMusicText(musicTitle)
+                musicPhase = 4
+                musicNextAt = now + MUSIC_PART_S * 1000L
+            }
+            else -> { // fertig, Feld leeren
+                client.send(listOf(HudMessage(HudProtocol.clearEventBody(HudProtocol.F_CALL_EVENT))))
+                musicPhase = 0
+            }
+        }
+    }
+
+    /** Titel wegnehmen (Schalter aus). */
+    fun clearMusic() {
+        if (musicPhase != 0) {
+            musicPhase = 0
+            if (client.isReady && !callActive) client.send(listOf(HudMessage(HudProtocol.clearEventBody(HudProtocol.F_CALL_EVENT))))
+        }
     }
 
     fun setRoute(
@@ -256,6 +321,7 @@ class HudController(private val client: HudClient) {
         }
         if (callClearAt != 0L && now > callClearAt) showNotice(true, null, true)
         if (msgClearAt != 0L && now > msgClearAt) showNotice(false, null, true)
+        musicStep(now)
         if (client.isReady && now - lastSendAt > KEEPALIVE_MS) {
             // Lebenszeichen: Uhrzeit erneut senden. Das HUD quittiert, ein totes Gerät fällt so auf.
             sent = sent - HudProtocol.F_TIME
@@ -300,6 +366,10 @@ class HudController(private val client: HudClient) {
         const val KEEPALIVE_MS = 10_000L
         const val CALL_MAX_S = 120
         const val MSG_SHOW_S = 5
+        const val MUSIC_PART_S = 4
+        const val MUSIC_HUD_HIDE_S = 9 // nur Sicherheit, die App nimmt den Text selbst weg
+        const val MUSIC_GAP_MS = 1_000L
+        const val MUSIC_MAX_CHARS = 19
         const val GOAL_SHOW_MS = 20_000L
         const val VIA_SHOW_MS = 8_000L
     }

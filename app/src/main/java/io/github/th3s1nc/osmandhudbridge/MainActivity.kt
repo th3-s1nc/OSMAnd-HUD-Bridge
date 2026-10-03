@@ -117,15 +117,15 @@ class MainActivity : AppCompatActivity() {
         val swService = findViewById<MaterialSwitch>(R.id.swService)
         swService.setOnCheckedChangeListener { _, on ->
             if (serviceSyncing) return@setOnCheckedChangeListener
+            prefs.edit().putBoolean(BridgeService.KEY_HUD_ON, on).apply()
             if (on) {
                 BridgeService.userStopped = false
                 onStartClicked()
             } else {
-                BridgeService.userStopped = true
-                stopService(Intent(this, BridgeService::class.java))
+                // Nur die Bluetooth-Verbindung endet; Laden der Straßendaten läuft im Dienst weiter (er beendet sich selbst, wenn nichts zu tun ist)
+                applyConfigIfRunning()
             }
-            // Bricht der Nutzer die Auswahl ab, springt der Schalter hier wieder zurück
-            swService.postDelayed({ refresh() }, 2500)
+            swService.postDelayed({ refresh() }, 1500)
         }
     }
 
@@ -256,6 +256,161 @@ class MainActivity : AppCompatActivity() {
         if (BridgeService.running) BridgeService.send(this, BridgeService.ACTION_CONFIG)
     }
 
+    private val pickGpx = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) importGpx(uri)
+    }
+
+    /** GPX-Datei lesen, Kacheln entlang der Strecke merken und das Laden anstoßen. */
+    private fun importGpx(uri: Uri) {
+        val app = applicationContext
+        Thread {
+            val msg = try {
+                val text = contentResolver.openInputStream(uri)?.use { s ->
+                    val b = s.readBytes()
+                    if (b.size > 30_000_000) null else String(b, Charsets.UTF_8)
+                }
+                val route = text?.let { io.github.th3s1nc.osmandhudbridge.limit.GpxParser.parse(it) }
+                if (route == null) {
+                    "Keine Strecke in der Datei gefunden (erwartet: GPX mit Track oder Route)."
+                } else {
+                    val tiles = io.github.th3s1nc.osmandhudbridge.limit.PreloadPlanner.route(route.points, if (route.sparse) 3000.0 else 1500.0)
+                    val store = io.github.th3s1nc.osmandhudbridge.limit.TourStore(
+                        java.io.File(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(app).parentFile, "tours")
+                    )
+                    store.add(route.name, tiles)
+                    BridgeBus.log("Tour importiert: ${route.name}, ${route.points.size} Punkte, ${tiles.size} Kacheln")
+                    io.github.th3s1nc.osmandhudbridge.limit.PreloadWorker.runTours(app)
+                    "Tour „${route.name}“: ${tiles.size} Kacheln" + (if (route.sparse) ". Hinweis: wenige Punkte in der Datei, der Rand wurde auf 3 km verbreitert." else "")
+                }
+            } catch (e: Exception) {
+                "Datei konnte nicht gelesen werden (${e.message ?: e.javaClass.simpleName})."
+            }
+            runOnUiThread {
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+                toursStatsAt = 0L
+            }
+        }.start()
+    }
+
+    private var toursStatsAt = 0L
+    private var toursBusy = false
+    private var toursText = "Keine Tour in Arbeit"
+    private var toursStatus: List<io.github.th3s1nc.osmandhudbridge.limit.TourStore.Status> = emptyList()
+
+    /** Stand der Touren höchstens alle 4 s im Hintergrund zählen. */
+    private fun updateTours() {
+        findViewById<TextView>(R.id.tvTours).text = toursText
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (toursBusy || (toursStatsAt != 0L && now - toursStatsAt < 4_000L)) return
+        toursBusy = true
+        toursStatsAt = now
+        val dir = io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext)
+        Thread {
+            val st = try {
+                val cache = io.github.th3s1nc.osmandhudbridge.limit.TileCache(dir)
+                io.github.th3s1nc.osmandhudbridge.limit.TourStore(java.io.File(dir.parentFile, "tours")).status(cache, System.currentTimeMillis())
+            } catch (_: Exception) { emptyList() }
+            val txt = if (st.isEmpty()) "Keine Tour in Arbeit"
+                else st.joinToString("\n") { "${it.name}: ${it.total - it.missing} von ${it.total} Kacheln" }
+            runOnUiThread {
+                val changed = txt != toursText
+                toursText = txt
+                toursStatus = st
+                toursBusy = false
+                if (changed) refresh() // Live-Zeilen sofort nachziehen (updateTours ist auf 4 s gedrosselt, das ergibt keine Schleife)
+            }
+        }.start()
+    }
+
+    private val monthNames = listOf("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember")
+
+    private fun dateText(d: java.time.LocalDate) = "${d.dayOfMonth}. ${monthNames[d.monthValue - 1]}"
+
+    /** Karte "Saison" (Werkzeuge): Schalter, Beginn- und Ende-Monat, Vorlauf. */
+    private fun setupSeason() {
+        val sw = findViewById<MaterialSwitch>(R.id.swSeason)
+        val box = findViewById<View>(R.id.seasonBox)
+        val btnFrom = findViewById<MaterialButton>(R.id.btnSeasonFrom)
+        val btnTo = findViewById<MaterialButton>(R.id.btnSeasonTo)
+        val sld = findViewById<Slider>(R.id.sldSeasonLead)
+        val tvLead = findViewById<TextView>(R.id.tvSeasonLead)
+        fun leadText(w: Int) = when (w) { 0 -> "nicht vorher"; 1 -> "1 Woche vorher"; else -> "$w Wochen vorher" }
+        fun ui() {
+            box.visibility = if (sw.isChecked) View.VISIBLE else View.GONE
+            btnFrom.text = "Beginn: " + monthNames[prefs.getInt(BridgeService.KEY_SEASON_FROM, 3).coerceIn(1, 12) - 1]
+            btnTo.text = "Ende: " + monthNames[prefs.getInt(BridgeService.KEY_SEASON_TO, 10).coerceIn(1, 12) - 1]
+            tvLead.text = leadText(sld.value.toInt())
+        }
+        fun changed() {
+            io.github.th3s1nc.osmandhudbridge.limit.PreloadWorker.apply(this)
+            if (BridgeService.running) BridgeService.send(this, BridgeService.ACTION_CONFIG)
+            refresh()
+        }
+        sw.isChecked = prefs.getBoolean(BridgeService.KEY_SEASON_ON, false)
+        sld.value = prefs.getInt(BridgeService.KEY_SEASON_LEAD, 3).coerceIn(0, 6).toFloat()
+        ui()
+        sw.setOnCheckedChangeListener { _, on ->
+            prefs.edit().putBoolean(BridgeService.KEY_SEASON_ON, on).apply()
+            ui()
+            changed()
+            if (!on) autoConnect() // Saison-Schalter aus: die App darf wieder starten
+        }
+        fun pickMonth(title: String, key: String, def: Int) {
+            val cur = prefs.getInt(key, def).coerceIn(1, 12) - 1
+            AlertDialog.Builder(this)
+                .setTitle(title)
+                .setSingleChoiceItems(monthNames.toTypedArray(), cur) { dlg, which ->
+                    prefs.edit().putInt(key, which + 1).apply()
+                    dlg.dismiss()
+                    ui()
+                    changed()
+                }
+                .setNegativeButton("Abbrechen", null)
+                .show()
+        }
+        btnFrom.setOnClickListener { pickMonth("Saisonbeginn (erster Tag des Monats)", BridgeService.KEY_SEASON_FROM, 3) }
+        btnTo.setOnClickListener { pickMonth("Saisonende (letzter Tag des Monats)", BridgeService.KEY_SEASON_TO, 10) }
+        sld.addOnChangeListener { _, value, fromUser ->
+            tvLead.text = leadText(value.toInt())
+            if (fromUser) {
+                prefs.edit().putInt(BridgeService.KEY_SEASON_LEAD, value.toInt()).apply()
+                changed()
+            }
+        }
+    }
+
+    /** Live-Karte: eine Zeile pro offenem Punkt (Touren, dann Umkreis). Fertiges verschwindet. */
+    private fun updateLiveLoad(preloadText: String): Boolean {
+        val box = findViewById<android.widget.LinearLayout>(R.id.liveLoadRows)
+        val rows = ArrayList<Pair<String, String>>()
+        for (t in toursStatus) rows += "Straßendaten Tour \u201e${t.name}\u201c" to "${t.total - t.missing} von ${t.total} Kacheln"
+        val circleDone = preloadText.startsWith("Fertig") || preloadText == "Aus" || preloadText == "–" || preloadText == "-" ||
+            preloadText.startsWith("Gerade aus") || preloadText.startsWith("Hintergrund: startet")
+        if (!circleDone) {
+            var v = preloadText.removePrefix("Hintergrund: ").removePrefix("Vorgeladen: ")
+            if (toursStatus.isNotEmpty()) v += " (wartet auf Tour)"
+            rows += "Straßendaten Umkreis" to v
+        }
+        val sig = rows.joinToString("|") { it.first + "=" + it.second }
+        if (box.tag == sig) return rows.isNotEmpty()
+        box.tag = sig
+        box.removeAllViews()
+        val gap = (12 * resources.displayMetrics.density).toInt()
+        for ((label, value) in rows) {
+            box.addView(TextView(this).apply {
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall)
+                text = label
+                setPadding(0, gap, 0, 0)
+            })
+            box.addView(TextView(this).apply {
+                setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium)
+                setTextColor(0xFFFF7A00.toInt())
+                text = value
+            })
+        }
+        return rows.isNotEmpty()
+    }
+
     private fun setupSettings() {
         val swOsmand = findViewById<MaterialSwitch>(R.id.chkOsmand)
         swOsmand.isChecked = prefs.getBoolean(BridgeService.KEY_OSMAND, true)
@@ -266,12 +421,17 @@ class MainActivity : AppCompatActivity() {
 
         for ((id, key) in listOf(
             R.id.chkNoticeCall to BridgeService.KEY_NOTICE_CALL,
-            R.id.chkNoticeMsg to BridgeService.KEY_NOTICE_MSG,
-            R.id.chkNoticeName to BridgeService.KEY_NOTICE_NAME
+            R.id.chkNoticeMsg to BridgeService.KEY_NOTICE_MSG
         )) {
             val sw = findViewById<MaterialSwitch>(id)
             sw.isChecked = prefs.getBoolean(key, true)
             sw.setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(key, checked).apply() }
+        }
+        val swMusic = findViewById<MaterialSwitch>(R.id.chkNoticeMusic)
+        swMusic.isChecked = prefs.getBoolean(BridgeService.KEY_NOTICE_MUSIC, false)
+        swMusic.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(BridgeService.KEY_NOTICE_MUSIC, checked).apply()
+            applyConfigIfRunning()
         }
 
         val swLimit = findViewById<MaterialSwitch>(R.id.chkLimit)
@@ -302,15 +462,22 @@ class MainActivity : AppCompatActivity() {
             Triple(R.id.chkTags, BridgeService.KEY_LIM_TAGS, true),
             Triple(R.id.chkSigns, BridgeService.KEY_LIM_SIGNS, true),
             Triple(R.id.chkNeighbors, BridgeService.KEY_LIM_NEIGHBORS, true),
-            Triple(R.id.swPreloadMobile, BridgeService.KEY_PRELOAD_MOBILE, false)
+            Triple(R.id.swPreloadMobile, BridgeService.KEY_PRELOAD_MOBILE, false),
+            Triple(R.id.swPreloadBg, BridgeService.KEY_PRELOAD_BG, false),
+            Triple(R.id.swVerbose, BridgeService.KEY_VERBOSE, false)
         )) {
             val sw = findViewById<MaterialSwitch>(id)
             sw.isChecked = prefs.getBoolean(key, def)
             sw.setOnCheckedChangeListener { _, checked ->
                 prefs.edit().putBoolean(key, checked).apply()
+                if (key == BridgeService.KEY_VERBOSE) BridgeBus.verbose = checked
                 applyConfigIfRunning()
+                if (key == BridgeService.KEY_PRELOAD_BG || key == BridgeService.KEY_PRELOAD_MOBILE) {
+                    io.github.th3s1nc.osmandhudbridge.limit.PreloadWorker.apply(this)
+                }
             }
         }
+        io.github.th3s1nc.osmandhudbridge.limit.PreloadWorker.apply(this)
 
         val preloadValues = listOf(0, 10, 25, 50)
         val sldPre = findViewById<Slider>(R.id.sldPreload)
@@ -326,7 +493,41 @@ class MainActivity : AppCompatActivity() {
             if (fromUser) {
                 prefs.edit().putInt(BridgeService.KEY_PRELOAD_KM, preloadValues[i]).apply()
                 applyConfigIfRunning()
+                io.github.th3s1nc.osmandhudbridge.limit.PreloadWorker.apply(this)
             }
+        }
+
+        setupSeason()
+
+        val cacheValues = listOf(512, 1024, 2048, 5120, 10240)
+        val sldCache = findViewById<Slider>(R.id.sldCache)
+        val tvCacheName = findViewById<TextView>(R.id.tvCacheName)
+        fun cacheUi(i: Int) {
+            val mb = cacheValues[i]
+            tvCacheName.text = if (mb < 1024) "0,5 GB" else "${mb / 1024} GB"
+        }
+        val cacheIdx = cacheValues.indexOf(prefs.getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB)).takeIf { it >= 0 } ?: 2
+        sldCache.value = cacheIdx.toFloat()
+        cacheUi(cacheIdx)
+        sldCache.addOnChangeListener { _, value, fromUser ->
+            val i = value.toInt().coerceIn(0, cacheValues.size - 1)
+            cacheUi(i)
+            if (fromUser) {
+                prefs.edit().putInt(BridgeService.KEY_CACHE_MB, cacheValues[i]).apply()
+                applyConfigIfRunning()
+            }
+        }
+
+        findViewById<MaterialButton>(R.id.btnTourPick).setOnClickListener {
+            try { pickGpx.launch(arrayOf("*/*")) } catch (_: Exception) { Toast.makeText(this, "Keine Dateiauswahl verfügbar", Toast.LENGTH_LONG).show() }
+        }
+        findViewById<MaterialButton>(R.id.btnTourClear).setOnClickListener {
+            io.github.th3s1nc.osmandhudbridge.limit.TourStore(
+                java.io.File(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext).parentFile, "tours")
+            ).clear()
+            toursText = "Keine Tour in Arbeit"
+            toursStatsAt = 0L
+            Toast.makeText(this, "Touren in Arbeit entfernt (gespeicherte Kacheln bleiben)", Toast.LENGTH_SHORT).show()
         }
 
         val toggle = findViewById<MaterialButtonToggleGroup>(R.id.toggleSpeed)
@@ -373,20 +574,75 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------- Anzeige ----------------
 
+    private var cacheStatsAt = 0L
+    private var cacheStatsBusy = false
+    private var cacheStatsText = "Belegt: –"
+
+    /** Belegten Kartenspeicher höchstens alle 15 s im Hintergrund zählen (bei vielen Dateien dauert das etwas). */
+    private fun updateCacheUsed() {
+        findViewById<TextView>(R.id.tvCacheUsed).text = cacheStatsText
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (cacheStatsBusy || (cacheStatsAt != 0L && now - cacheStatsAt < 15_000L)) return
+        cacheStatsBusy = true
+        cacheStatsAt = now
+        val dir = io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext)
+        Thread {
+            val (n, bytes) = try { io.github.th3s1nc.osmandhudbridge.limit.TileCache(dir).stats() } catch (_: Exception) { 0 to 0L }
+            val mb = bytes / (1024.0 * 1024.0)
+            val txt = "Belegt: " + (if (mb >= 1024) String.format(java.util.Locale.GERMANY, "%.1f GB", mb / 1024) else String.format(java.util.Locale.GERMANY, "%.0f MB", mb)) +
+                ", $n Kacheln"
+            runOnUiThread { cacheStatsText = txt; cacheStatsBusy = false }
+        }.start()
+    }
+
+    /** Kurzer Status für die Live-Karte, Einzelheiten stehen im Protokoll. */
+    private fun osmStatus(raw: String): String = when {
+        raw.contains("aus") && raw.startsWith("OSMAnd: aus") -> "Aus"
+        raw.contains("nicht freigegeben") -> "Nicht freigegeben (siehe Protokoll)"
+        raw.contains("Anmeldung fehlgeschlagen") -> "Anmeldung fehlgeschlagen"
+        raw.contains("verbunden (") || raw.contains("liefert nichts") || raw.contains("Ansagen nicht verfügbar") -> "Verbunden"
+        raw.contains("verbinde") -> "Verbinde …"
+        raw.contains("verloren") || raw.contains("Binding beendet") || raw.contains("nicht erreichbar") || raw.contains("keine Antwort") -> "Nicht verbunden"
+        else -> "–"
+    }
+
     private fun refresh() {
         val hud = BridgeBus.hud.removePrefix("HUD: ")
         val running = BridgeService.running
         val enabled = prefs.getBoolean(BridgeService.KEY_ENABLED, true)
+        val hudOn = BridgeService.hudWanted(prefs)
+        val season = BridgeService.seasonState(prefs)
+        val inSeason = season == io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.IN_SEASON
+        findViewById<TextView>(R.id.tvSeasonStatus).text = if (!prefs.getBoolean(BridgeService.KEY_SEASON_ON, false)) "" else {
+            val plan = BridgeService.seasonPlan(prefs)
+            val today = java.time.LocalDate.now()
+            when (season) {
+                io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.IN_SEASON -> "Gerade ist Saison, die App läuft normal."
+                io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.LEAD -> "Vor der Saison: Straßendaten werden geladen, Saisonbeginn am " + (plan.nextStart(today)?.let { dateText(it) } ?: "–") + "."
+                else -> "Die App ruht. Laden ab " + (plan.loadStart(today)?.let { dateText(it) } ?: "–") + ", Saisonbeginn am " + (plan.nextStart(today)?.let { dateText(it) } ?: "–") + "."
+            }
+        }
+        val preloadText = when {
+            BridgeService.running -> BridgeBus.preload
+            prefs.getBoolean(BridgeService.KEY_PRELOAD_BG, false) && prefs.getInt(BridgeService.KEY_PRELOAD_KM, BridgeService.DEFAULT_PRELOAD_KM) > 0 ->
+                if (BridgeBus.preload != "–" && BridgeBus.preload != "-") BridgeBus.preload
+                else "Hintergrund: startet, sobald WLAN da ist (Android bestimmt den Zeitpunkt)"
+            else -> "Gerade aus (Vorladen läuft, sobald die App aktiv ist)"
+        }
+        findViewById<TextView>(R.id.tvPreloadStatus).text = preloadText
+        val loading = updateLiveLoad(preloadText)
         tvHud.text = when {
-            !enabled -> "Bridge ausgeschaltet"
+            !enabled -> "App ruht, HUD frei"
+            !inSeason -> "Außerhalb der Saison"
+            !hudOn -> if (running && loading) "Kein HUD verbunden, Straßendaten laden läuft" else "Kein HUD verbunden"
             running -> hud.replaceFirstChar { it.uppercase() }
-            else -> "Dienst gestoppt"
+            else -> "HUD nicht verbunden"
         }
         dotHud.setTextColor(
             ContextCompat.getColor(
                 this,
                 when {
-                    !running -> R.color.status_off
+                    !running || !hudOn || !enabled || !inSeason -> R.color.status_off
                     hud.contains("bereit") -> R.color.status_ok
                     hud.contains("Fehler", true) || hud.contains("abgelehnt", true) -> R.color.status_bad
                     else -> R.color.status_warn
@@ -394,23 +650,34 @@ class MainActivity : AppCompatActivity() {
             )
         )
         tvServiceHint.text = if (!enabled) {
-            "Die App nutzt weder Bluetooth noch GPS oder Internet. Das HUD ist frei für die Tilsberk-App."
+            "Die App ruht komplett: kein Bluetooth, kein GPS, kein Laden. Das HUD ist frei für die Tilsberk-App. Nur das Laden im Hintergrund per WLAN läuft weiter, falls du es eingeschaltet hast."
+        } else if (!inSeason) {
+            val plan = BridgeService.seasonPlan(prefs)
+            val today = java.time.LocalDate.now()
+            val start = plan.nextStart(today)
+            val load = plan.loadStart(today)
+            "Die App ruht bis zum Saisonbeginn am " + (start?.let { dateText(it) } ?: "–") + "." +
+                if (season == io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.LEAD) " Straßendaten werden gerade im Hintergrund geladen."
+                else if (plan.leadWeeks > 0 && load != null) " Straßendaten laden ab " + dateText(load) + "." else ""
+        } else if (!hudOn) {
+            "HUD verbinden ist aus. Straßendaten laden läuft weiter, der Standort wird sparsam abgefragt."
         } else if (running) {
             "Läuft auch bei ausgeschaltetem Display."
         } else {
             "Schalte \"HUD verbinden\" ein, um das HUD zu verbinden."
         }
-        findViewById<TextView>(R.id.tvPreloadStatus).text = if (BridgeService.running) BridgeBus.preload else "Der Dienst läuft nicht (Start: Übersicht)"
+        updateCacheUsed()
+        updateTours()
         syncPermSwitches()
         val swJust = findViewById<MaterialSwitch>(R.id.swJustage)
         val justOn = prefs.getBoolean(BridgeService.KEY_JUSTAGE, false)
         if (swJust.isChecked != justOn) { justageSyncing = true; swJust.isChecked = justOn; justageSyncing = false }
         val swService = findViewById<MaterialSwitch>(R.id.swService)
-        if (swService.isChecked != running) { serviceSyncing = true; swService.isChecked = running; serviceSyncing = false }
+        if (swService.isChecked != hudOn) { serviceSyncing = true; swService.isChecked = hudOn; serviceSyncing = false }
         fun plain(t: String) = t.substringAfter(": ", t)
         tvGps.text = plain(BridgeBus.gps)
         tvLimit.text = plain(BridgeBus.limit)
-        tvOsm.text = plain(BridgeBus.osm)
+        tvOsm.text = osmStatus(BridgeBus.osm)
         val limRaw = BridgeBus.limit
         val limKmh = Regex("(\\d+) km/h").find(limRaw)?.groupValues?.get(1)
         val tvSignValue = findViewById<TextView>(R.id.tvSignValue)
@@ -422,8 +689,8 @@ class MainActivity : AppCompatActivity() {
         }
         val spd = Regex("Tempo: (\\d+) km/h").find(BridgeBus.gps)?.groupValues?.get(1)
         findViewById<TextView>(R.id.tvSignSpeed).text = "Tempo: " + (spd?.let { "$it km/h" } ?: "–")
-        findViewById<TextView>(R.id.tvLogHome).text = BridgeBus.lastLines(3).ifBlank { "–" }
-        tvLog.text = BridgeBus.lastLines(25)
+        findViewById<TextView>(R.id.tvLogHome).text = BridgeBus.lastLinesNewestFirst(3).ifBlank { "–" }
+        tvLog.text = BridgeBus.lastLinesNewestFirst(25)
     }
 
     // ---------------- Start ----------------
@@ -432,14 +699,22 @@ class MainActivity : AppCompatActivity() {
     private fun autoConnect() {
         if (!prefs.getBoolean(BridgeService.KEY_ENABLED, true)) return
         if (BridgeService.running || BridgeService.userStopped) return
-        if (prefs.getString(BridgeService.KEY_ADDR, null) == null) return
+        if (BridgeService.seasonState(prefs) != io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.IN_SEASON) return
+        val hudOn = BridgeService.hudWanted(prefs) && prefs.getString(BridgeService.KEY_ADDR, null) != null
+        val loadOn = prefs.getInt(BridgeService.KEY_PRELOAD_KM, BridgeService.DEFAULT_PRELOAD_KM) > 0 || toursExist()
+        if (!hudOn && !loadOn) return
         val needed = buildList {
-            if (Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
+            if (hudOn && Build.VERSION.SDK_INT >= 31) add(Manifest.permission.BLUETOOTH_CONNECT)
             add(Manifest.permission.ACCESS_FINE_LOCATION)
         }
         if (needed.any { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }) return
-        BridgeService.send(this)
+        if (hudOn) pickDeviceAndStart() else BridgeService.send(this)
     }
+
+    private fun toursExist(): Boolean = try {
+        java.io.File(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext).parentFile, "tours")
+            .listFiles { f -> f.name.endsWith(".tour") }?.isNotEmpty() == true
+    } catch (_: Exception) { false }
 
     private fun onStartClicked() {
         // Ein ausdrücklicher Start schaltet die Bridge wieder ein
@@ -469,22 +744,34 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Bluetooth ist ausgeschaltet", Toast.LENGTH_LONG).show()
             return
         }
-        val bonded = adapter.bondedDevices.orEmpty()
-        val huds = bonded.filter { isHud(it) }.ifEmpty { bonded.toList() } // nichts erkannt: alle gekoppelten zur Auswahl
+        val bonded = adapter.bondedDevices.orEmpty().toList()
+        val huds = bonded.filter { isHud(it) }
         when {
-            huds.isEmpty() -> AlertDialog.Builder(this)
-                .setTitle("Kein gekoppeltes Gerät")
-                .setMessage("HUD einschalten und in den Android-Bluetooth-Einstellungen koppeln.")
-                .setPositiveButton("OK", null)
-                .show()
-            huds.size == 1 -> begin(huds[0])
-            else -> AlertDialog.Builder(this)
-                .setTitle("Welches HUD?")
-                .setItems(huds.map { "${it.name ?: "?"} (${it.address})" }.toTypedArray()) { _, i ->
-                    begin(huds[i])
+            huds.isEmpty() -> {
+                // ein früher gemerktes Gerät, das kein HUD ist (und nicht von Hand gewählt wurde), wird vergessen
+                if (!prefs.getBoolean("addr_manual", false)) {
+                    prefs.edit().remove(BridgeService.KEY_ADDR).remove(BridgeService.KEY_NAME).apply()
                 }
-                .show()
+                val b = AlertDialog.Builder(this)
+                    .setTitle("Kein HUD gefunden")
+                    .setMessage("Schalte das HUD ein und koppel es in den Android-Bluetooth-Einstellungen. Es heißt meist \"TILS\" oder \"TILSBERK Head-Up Display\".")
+                    .setPositiveButton("OK", null)
+                if (bonded.isNotEmpty()) b.setNeutralButton("Alle gekoppelten Geräte zeigen") { _, _ -> pickDevice(bonded, true) }
+                b.show()
+                // ohne HUD trotzdem Straßendaten laden, wenn es etwas zu laden gibt
+                if (prefs.getInt(BridgeService.KEY_PRELOAD_KM, BridgeService.DEFAULT_PRELOAD_KM) > 0 || toursExist()) BridgeService.send(this)
+            }
+            huds.size == 1 -> begin(huds[0])
+            else -> pickDevice(huds)
         }
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun pickDevice(list: List<BluetoothDevice>, manual: Boolean = false) {
+        AlertDialog.Builder(this)
+            .setTitle("Welches HUD?")
+            .setItems(list.map { "${it.name ?: "?"} (${it.address})" }.toTypedArray()) { _, i -> begin(list[i], manual) }
+            .show()
     }
 
     @SuppressLint("MissingPermission")
@@ -495,9 +782,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("MissingPermission")
-    private fun begin(d: BluetoothDevice) {
+    private fun begin(d: BluetoothDevice, manual: Boolean = false) {
         BridgeService.userStopped = false
         prefs.edit()
+            .putBoolean("addr_manual", manual)
+            .putBoolean(BridgeService.KEY_HUD_ON, true)
             .putString(BridgeService.KEY_ADDR, d.address)
             .putString(BridgeService.KEY_NAME, d.name)
             .apply()

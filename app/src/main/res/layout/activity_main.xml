@@ -26,14 +26,14 @@
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
                 <TextView android:id="@+id/dotHud" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="●" android:textSize="30sp" android:textColor="@color/status_off" />
-                <TextView android:id="@+id/tvHud" style="@style/TextAppearance.Material3.HeadlineSmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:textStyle="bold" android:text="Dienst gestoppt" />
+                <TextView android:id="@+id/tvHud" style="@style/TextAppearance.Material3.HeadlineSmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="12dp" android:textStyle="bold" android:text="HUD nicht verbunden" />
             </LinearLayout>
             <TextView android:id="@+id/tvServiceHint" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="" />
             <View android:layout_width="match_parent" android:layout_height="1dp" android:layout_marginTop="16dp" android:layout_marginBottom="12dp" android:background="?attr/colorOutlineVariant" />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swService" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="HUD verbinden" android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
-            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Startet den Dienst und verbindet das HUD. Aus: der Dienst wird beendet." />
-            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swMaster" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:checked="true" android:text="Bridge aktiv" android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
-            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Ausschalten, wenn du die Tilsberk-App nutzt: Dann bleibt das HUD für sie frei und diese App tut nichts." />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Nur die Bluetooth-Verbindung zum HUD. Aus: Straßendaten laden läuft trotzdem weiter." />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swMaster" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:checked="true" android:text="App aktiv" android:textAppearance="@style/TextAppearance.Material3.TitleMedium" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Aus: Die App ruht komplett (kein Bluetooth, kein GPS, kein Laden), das HUD ist frei für die Tilsberk-App. Nur das Laden im Hintergrund per WLAN läuft weiter, falls du es eingeschaltet hast." />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
     <com.google.android.material.card.MaterialCardView
@@ -47,6 +47,7 @@
             <TextView android:id="@+id/tvLimit" style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FF7A00" android:text="–" />
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="OSMAnd" />
             <TextView android:id="@+id/tvOsm" style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FF7A00" android:text="–" />
+            <LinearLayout android:id="@+id/liveLoadRows" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
     <com.google.android.material.card.MaterialCardView
@@ -165,10 +166,11 @@
         android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
             <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Meldungen" />
-            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Blendet ein Symbol am HUD ein, nur in Explorer und City. Liest die Benachrichtigungen mit (Benachrichtigungszugriff nötig). Nachrichten erscheinen 5 s als Anruf-Symbol, Anrufe bleiben, solange es klingelt." />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Blendet Meldungen am HUD ein, nur in Explorer und City. Liest die Benachrichtigungen mit (Benachrichtigungszugriff nötig). Nachrichten erscheinen 5 s als Anruf-Symbol, Anrufe bleiben, solange es klingelt." />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeCall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Eingehende Anrufe" />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeMsg" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="WhatsApp-Nachrichten" />
-            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeName" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Name des Absenders anzeigen" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkNoticeMusic" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="false" android:text="Spotify" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Beginnt ein neuer Titel, erscheint im Meldungsfeld des HUD, dort wo auch Anrufe erscheinen, erst 4 s der Interpret, dann 1 s Pause, dann 4 s der Titel (je höchstens 19 Zeichen). Auch andere Musik-Apps. Nur in Explorer und City, Anrufe und Nachrichten haben Vorrang." />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
             <com.google.android.material.card.MaterialCardView
@@ -201,6 +203,13 @@
     </ScrollView>
     <ScrollView android:id="@+id/pageSettings" android:layout_width="match_parent" android:layout_height="match_parent" android:visibility="gone" android:clipToPadding="false">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Straßendaten: Diese App zeigt keine Karte. Sie lädt Straßendaten für Tempolimit und Straßennamen." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
             <com.google.android.material.card.MaterialCardView
                 style="@style/Widget.HudBridge.Card"
                 android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
@@ -254,7 +263,7 @@
         android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="0dp">
-                <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Gebiet vorladen" />
+                <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Straßendaten vorladen" />
                 <TextView android:id="@+id/tvPreloadName" style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textStyle="bold" android:textColor="#FF7A00" android:text="25 km" />
             </LinearLayout>
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginStart="2dp" android:text="Lädt im WLAN von selbst die Karte rund um deinen letzten Standort im Voraus und speichert sie auf dem Handy (180 Tage). Unterwegs sind dann Tempolimit und Straßennamen auch bei schlechtem Empfang da. Über mobile Daten wird nichts im Voraus geladen." />
@@ -268,6 +277,37 @@
             <TextView android:id="@+id/tvPreloadStatus" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="#FF7A00" android:text="–" />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swPreloadMobile" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:layout_marginStart="0dp" android:checked="false" android:text="Auch über mobile Daten vorladen" />
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Sonst lädt die App nur im WLAN im Voraus. Bei 25 km sind es grob 50 bis 150 MB, bei 50 km bis etwa 400 MB. Im Roaming (Ausland) wird nie im Voraus geladen." />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swPreloadBg" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:layout_marginStart="0dp" android:checked="false" android:text="Auch im Hintergrund vorladen" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Lädt auch, wenn die App gerade nicht läuft, wenn Android es erlaubt: nur im WLAN und nicht bei schwachem Akku. Der Zeitpunkt wird von Android bestimmt. Braucht einmal einen bekannten Standort (App einmal mit GPS laufen lassen). Läuft auch, wenn „App aktiv“ aus ist." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Tour vorladen" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginStart="2dp" android:text="Lädt die Karte entlang einer geplanten Strecke im Voraus (GPX-Datei, zum Beispiel von Calimoto, Kurviger oder Motobit). Bereits gespeicherte Kacheln werden übersprungen. Die Tour hat Vorrang vor dem Kreis und lädt im WLAN auch im Hintergrund." />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnTourPick" style="@style/Widget.HudBridge.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="GPX-Datei wählen" />
+            <TextView android:id="@+id/tvTours" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Keine Tour in Arbeit" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnTourClear" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Touren in Arbeit abbrechen" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Speicher für Straßendaten" />
+                <TextView android:id="@+id/tvCacheName" style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FF7A00" android:text="2 GB" />
+            </LinearLayout>
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:layout_marginStart="2dp" android:text="So viel Platz darf die App höchstens für gespeicherte Karten belegen. Ist er voll, werden die ältesten Kacheln gelöscht. Die Karten liegen im App-Speicher, Android leert ihn nicht von selbst." />
+            <com.google.android.material.slider.Slider android:id="@+id/sldCache" android:layout_width="match_parent" android:layout_height="wrap_content" android:valueFrom="0" android:valueTo="4" android:stepSize="1" android:value="2" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingStart="8dp" android:paddingEnd="8dp">
+                <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:gravity="start" android:text="0,5 GB" />
+                <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:gravity="center" android:text="2 GB" />
+                <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:gravity="end" android:text="10 GB" />
+            </LinearLayout>
+            <TextView android:id="@+id/tvCacheUsed" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Belegt: –" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
         </LinearLayout>
@@ -278,21 +318,42 @@
         style="@style/Widget.HudBridge.Card"
         android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
-            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Datenquellen" />
-            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkOsmand" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="OSMAnd-Navigation übernehmen" />
-            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Pfeil, Entfernung, Restweg, Restzeit, Ankunftszeit, nächste Straße und Kreisverkehr-Ausfahrt aus OSMAnd. Aus: es wird gar nichts aus OSMAnd übernommen (Tempo und Limit kommen dann aus GPS und OSM; Anrufe und WhatsApp bleiben aktiv)." />
-        </LinearLayout>
-    </com.google.android.material.card.MaterialCardView>
-    <com.google.android.material.card.MaterialCardView
-        style="@style/Widget.HudBridge.Card"
-        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
             <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Einrichtung" />
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="Beides wird für den Betrieb bei ausgeschaltetem Display bzw. zum Mitlesen von OSMAnd gebraucht." />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swNotifAccess" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Benachrichtigungszugriff" />
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Zum Mitlesen von OSMAnd, Anrufen und Nachrichten. Der Schalter zeigt den echten Zustand. Antippen öffnet die Android-Einstellungen, dort erlaubst oder entziehst du den Zugriff. Ist der Schalter dort ausgegraut: App-Info, ⋮ oben rechts, &quot;Eingeschränkte Einstellungen zulassen&quot;." />
             <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swBattery" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Akku-Optimierung ausgeschaltet" />
             <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Damit der Dienst auch bei ausgeschaltetem Display weiterläuft. Der Schalter zeigt den echten Zustand. Antippen öffnet die passende Android-Seite." />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Saison" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swSeason" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:layout_marginStart="0dp" android:checked="false" android:text="Saisonfahrer" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Außerhalb der Saison ruht die App komplett. Ein paar Wochen vor Saisonbeginn lädt sie im Hintergrund (nur WLAN) die Straßendaten rund um deinen letzten Standort. Importierte Touren laden immer sofort." />
+            <LinearLayout android:id="@+id/seasonBox" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:orientation="horizontal">
+                    <com.google.android.material.button.MaterialButton android:id="@+id/btnSeasonFrom" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginEnd="4dp" android:text="Beginn: März" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/btnSeasonTo" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:layout_marginStart="4dp" android:text="Ende: Oktober" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:orientation="horizontal">
+                    <TextView style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Straßendaten laden ab" />
+                    <TextView android:id="@+id/tvSeasonLead" style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="wrap_content" android:layout_height="wrap_content" android:textColor="#FF7A00" android:text="3 Wochen vorher" />
+                </LinearLayout>
+                <com.google.android.material.slider.Slider android:id="@+id/sldSeasonLead" android:layout_width="match_parent" android:layout_height="wrap_content" android:valueFrom="0" android:valueTo="6" android:stepSize="1" android:value="3" />
+                <TextView android:id="@+id/tvSeasonStatus" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="" />
+            </LinearLayout>
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+    <com.google.android.material.card.MaterialCardView
+        style="@style/Widget.HudBridge.Card"
+        android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Datenquellen" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/chkOsmand" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:checked="true" android:text="Navigation aus OSMAnd" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginStart="2dp" android:text="Pfeil, Entfernung, Restweg, Restzeit, Ankunftszeit, nächste Straße und Kreisverkehr-Ausfahrt aus OSMAnd. Aus: es wird gar nichts aus OSMAnd übernommen (Tempo und Limit kommen dann aus GPS und OSM; Anrufe und WhatsApp bleiben aktiv)." />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
     <com.google.android.material.card.MaterialCardView
@@ -321,6 +382,8 @@
         android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="12dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
             <TextView style="@style/TextAppearance.Material3.TitleMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Protokoll" />
+            <com.google.android.material.materialswitch.MaterialSwitch android:id="@+id/swVerbose" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:layout_marginStart="0dp" android:checked="false" android:text="Ausführliches Protokoll" />
+            <TextView style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Aus: Wiederholungen werden zusammengefasst (zum Beispiel 48 Verbindungsversuche in einer Zeile). An: jede Zeile einzeln, für die Fehlersuche. Die Datei fasst etwa 5 MB." />
             <TextView android:id="@+id/tvLog" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:fontFamily="monospace" android:textSize="11sp" android:textColor="#FF7A00" android:textIsSelectable="true" android:text="" />
             <com.google.android.material.button.MaterialButton android:id="@+id/btnLog" style="@style/Widget.HudBridge.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Log als TXT teilen" />
             <com.google.android.material.button.MaterialButton android:id="@+id/btnLogClear" style="@style/Widget.Material3.Button.OutlinedButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Log löschen" />

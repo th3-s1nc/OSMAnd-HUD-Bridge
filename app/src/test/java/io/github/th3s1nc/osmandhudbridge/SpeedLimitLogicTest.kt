@@ -4,6 +4,8 @@ import io.github.th3s1nc.osmandhudbridge.limit.Backoff
 import io.github.th3s1nc.osmandhudbridge.limit.LimitTracker
 import io.github.th3s1nc.osmandhudbridge.limit.MatchOptions
 import io.github.th3s1nc.osmandhudbridge.limit.NeighborIndex
+import io.github.th3s1nc.osmandhudbridge.limit.RepeatSummary
+import io.github.th3s1nc.osmandhudbridge.limit.ServerPool
 import io.github.th3s1nc.osmandhudbridge.limit.Sign
 import io.github.th3s1nc.osmandhudbridge.limit.SignTracker
 import io.github.th3s1nc.osmandhudbridge.limit.Zone
@@ -45,13 +47,14 @@ class SpeedLimitLogicTest {
         // Fahrt nach Norden: Nordnachbar wird mitgeladen
         val n = TileMath.wanted(latNearNorth, lonMid, 0.0, 15f)
         assertEquals(listOf(t, TileKey(2406, 383)), n)
-        // Fahrt nach Süden: nichts davon
-        assertEquals(listOf(t), TileMath.wanted(latNearNorth, lonMid, 180.0, 15f))
+        // Fahrt nach Süden: der Südnachbar (nie der nördliche)
+        assertEquals(listOf(t, TileKey(2404, 383)), TileMath.wanted(latNearNorth, lonMid, 180.0, 15f))
         // Stehen oder unbekannte Richtung: nur die eigene Kachel
         assertEquals(listOf(t), TileMath.wanted(latNearNorth, lonMid, 0.0, 0.5f))
         assertEquals(listOf(t), TileMath.wanted(latNearNorth, lonMid, null, 15f))
-        // weit weg von der Kante: nichts vorladen
-        assertEquals(listOf(t), TileMath.wanted(t.south + 0.002, lonMid, 0.0, 15f))
+        // Vorausschau 3 km: schon früh wird der Nordnachbar geholt, aber nie bei Fahrt nach Süden aus der Südkante heraus
+        assertEquals(listOf(t, TileKey(2406, 383)), TileMath.wanted(t.south + 0.002, lonMid, 0.0, 15f))
+        assertEquals(listOf(t, TileKey(2404, 383)), TileMath.wanted(t.south + 0.018, lonMid, 180.0, 15f))
         // Nordosten in der Ecke: Nord-, Ost- und Diagonalkachel
         val ne = TileMath.wanted(t.north - 0.002, t.east - 0.003, 45.0, 15f)
         assertEquals(listOf(t, TileKey(2406, 383), TileKey(2405, 384), TileKey(2406, 384)), ne)
@@ -87,9 +90,31 @@ class SpeedLimitLogicTest {
                 cache.write(TileKey(i, i), "x$i")
                 File(dir, TileKey(i, i).fileName).setLastModified(System.currentTimeMillis() - (20 - i) * 1000L)
             }
-            assertTrue((dir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 99) <= 4)
+            cache.trimNow()
+            assertTrue((dir.listFiles { f -> f.name.endsWith(".json") }?.size ?: 99) <= 3)
             assertNotNull(cache.read(TileKey(14, 14), System.currentTimeMillis()))
             assertNull(cache.read(k, System.currentTimeMillis()))
+        } finally { dir.deleteRecursively() }
+    }
+
+    @Test fun cacheTrimsByBytesOldestFirst() {
+        val dir = File(System.getProperty("java.io.tmpdir"), "hudcache_b_${System.nanoTime()}")
+        try {
+            val cache = TileCache(dir)
+            for (i in 1..6) {
+                cache.write(TileKey(i, i), "x".repeat(1000) + i)
+                File(dir, TileKey(i, i).fileName).setLastModified(System.currentTimeMillis() - (10 - i) * 60_000L)
+            }
+            val (n, bytes) = cache.stats()
+            assertEquals(6, n)
+            assertTrue(bytes > 0)
+            cache.maxBytes = bytes / 2
+            cache.trimNow()
+            val (n2, bytes2) = cache.stats()
+            assertTrue(n2 in 1..4)
+            assertTrue(bytes2 <= bytes / 2)
+            assertNotNull(cache.read(TileKey(6, 6), System.currentTimeMillis())) // neueste bleibt
+            assertNull(cache.read(TileKey(1, 1), System.currentTimeMillis()))   // älteste weg
         } finally { dir.deleteRecursively() }
     }
 
@@ -279,5 +304,71 @@ class SpeedLimitLogicTest {
         assertNull(SpeedLimitMatcher.guessLimit(mapOf("highway" to "service"), Zone.INNER))
         // Zone schlägt "beleuchtet/unbeleuchtet"
         assertEquals(100, SpeedLimitMatcher.guessLimit(mapOf("highway" to "primary", "lit" to "yes"), Zone.OUTER))
+    }
+
+    @Test
+    fun corridorLiesAheadOfTheDriver() {
+        val lat = 48.0107; val lon = 11.0121
+        val here = TileMath.tileOf(lat, lon)
+        val north = PreloadPlanner.corridor(lat, lon, 0.0, 20)
+        assertEquals(here, north.first())
+        assertEquals(north.size, north.toSet().size)
+        assertTrue(north.all { it.latIdx >= here.latIdx - 1 })
+        assertTrue(north.any { it.latIdx >= here.latIdx + 8 })
+        assertTrue(north.size in 10..40)
+        val east = PreloadPlanner.corridor(lat, lon, 90.0, 20)
+        assertTrue(east.any { it.lonIdx >= here.lonIdx + 6 })
+        assertTrue(east.all { it.lonIdx >= here.lonIdx })
+        assertTrue(PreloadPlanner.corridor(lat, lon, 0.0, 0).isEmpty())
+    }
+
+    @Test
+    fun serverPool_pausiertAusgefallene() {
+        val p = ServerPool(listOf("a", "b", "c", "d"), 1000L)
+        assertEquals(listOf("a", "b", "c"), p.race(0L, 3))
+        p.fail("a", 0L)
+        assertEquals(listOf("b", "c", "d"), p.race(10L, 3))
+        assertEquals(1, p.pausedCount(10L))
+        // nach der Pause ist a wieder dabei
+        assertEquals(listOf("a", "b", "c"), p.race(1001L, 3))
+        // Erfolg hebt die Pause sofort auf
+        p.fail("b", 2000L)
+        p.ok("b")
+        assertEquals(0, p.pausedCount(2001L))
+    }
+
+    @Test
+    fun serverPool_alleAusgefallen_trotzdemAlleProbieren() {
+        val p = ServerPool(listOf("a", "b"), 1000L)
+        p.fail("a", 0L); p.fail("b", 0L)
+        assertEquals(listOf("a", "b"), p.usable(5L))
+    }
+
+    @Test
+    fun serverPool_nextGehtReihumUndUeberspringtAusgefallene() {
+        val p = ServerPool(listOf("a", "b", "c"), 1000L)
+        p.fail("b", 0L)
+        val seen = (1..4).map { p.next(5L) }
+        assertTrue(!seen.contains("b"))
+        assertTrue(seen.contains("a") && seen.contains("c"))
+    }
+
+    @Test
+    fun serverPool_eigenePauseBeiAbweisung() {
+        val p = ServerPool(listOf("a", "b"), 1000L)
+        p.fail("a", 0L, 900_000L)
+        assertEquals(listOf("b"), p.usable(500_000L))
+        assertEquals(listOf("a", "b"), p.usable(900_001L))
+    }
+
+    @Test
+    fun repeatSummary_zaehltGruende() {
+        val r = RepeatSummary()
+        assertEquals(null, r.take())
+        repeat(6) { r.add("timeout") }
+        r.add("overpass-api.de: HTTP 403".substringAfter(": "))
+        assertEquals("7 Fehlversuche (6x timeout, 1x HTTP 403)", r.take())
+        assertTrue(r.isEmpty())
+        assertEquals(null, r.take())
     }
 }

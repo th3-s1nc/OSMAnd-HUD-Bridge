@@ -2,6 +2,95 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.30
+- Musik am HUD: Selbstausblendung des HUD jetzt 9 s (genau die Dauer der Anzeige), damit sich beim Weiterschalten Titel nicht überschneiden.
+
+## v0.11.29
+- Musik am HUD: Der Titel wurde nur 1 s gezeigt, weil sich das HUD nach 6 s selbst ausblendete. Selbstausblendung jetzt 15 s, das Wegnehmen macht die App.
+
+## v0.11.28
+- Spotify/Musik am HUD: Das HUD fror bei Texten über 19 Zeichen ein. Jetzt höchstens 19 Zeichen, nacheinander: Interpret 4 s, 1 s leer, Titel 4 s. Ein Anruf oder eine Nachricht bricht die Anzeige ab.
+
+## v0.11.27
+- Fehler behoben: In der Übersicht blieb "Karte wird geladen" stehen, obwohl die Karte längst da war und nur kein Limit gefunden wurde. Jetzt steht dort "Limit: unbekannt".
+- Protokoll: Bei "Tempolimit: unbekannt" steht jetzt der Grund dabei (Karte fehlt noch / keine Straße in der Nähe / Straße ohne Tempo-Angabe).
+- Vorausschau beim Fahren: Die nächste Kachel wird jetzt schon 3 km vor der Kante geholt (vorher 1 km).
+- Live-Laden fragt bis zu 4 Server gleichzeitig (vorher 3).
+
+## v0.11.26
+- Protokoll (Werkzeuge) und "Letzte Meldungen" (Übersicht): die neueste Zeile steht jetzt oben. Die Datei zum Teilen bleibt wie bisher zeitlich geordnet (älteste zuerst).
+
+## v0.11.25
+- Spotify-Anzeige: der Wechsel Interpret/Titel alle 2 s funktioniert am HUD nicht und ist wieder raus. Stattdessen steht "Interpret - Titel" 16 s lang im Meldungsfeld. Testweise bis 40 Zeichen (Umlaute werden zu ae/oe/ue, andere Sonderzeichen entfallen). Im Protokoll steht die Zeichenzahl des gesendeten Textes.
+
+## v0.11.24
+- Spotify-Anzeige: Das HUD scrollt nicht, deshalb wechselt die App 16 s lang alle 2 s zwischen Interpret und Titel (je viermal). Anrufe und Nachrichten verdrängen die Anzeige.
+
+## v0.11.23
+- Spotify-Anzeige korrigiert: Der Titel steht jetzt im Meldungsfeld des HUD, dort wo auch Anrufe und Nachrichten erscheinen (nicht mehr an der Stelle des Straßennamens). Länge testweise bis 30 Zeichen (das Feld nahm bisher höchstens 19), 15 s.
+
+## v0.11.22
+- Neu bei Meldungen: Schalter "Spotify" (standardmäßig aus). Beginnt in Spotify (oder einer anderen Musik-App) ein neuer Titel, zeigt das HUD 15 s lang "Interpret - Titel" an der Stelle des Straßennamens, ohne Symbol. Nur in Explorer und City, Anrufe haben Vorrang, Pausieren und Weiterspielen zählen nicht, Werbung wird übergangen. Sonderzeichen werden wie bei Straßennamen vereinfacht, höchstens 40 Zeichen. Braucht den Benachrichtigungszugriff, den die App ohnehin hat.
+- Der Schalter "Name des Absenders anzeigen" ist entfernt, der Name wird immer angezeigt.
+- Der Saison-Schalter heißt jetzt "Saisonfahrer".
+
+## v0.11.21
+- Neue Karte "Saison" (Werkzeuge, unter Einrichtung): "Nur in meiner Saison aktiv", Beginn- und Ende-Monat (zum Beispiel März bis Oktober, auch über den Jahreswechsel) und Vorlauf von 0 bis 6 Wochen. Außerhalb der Saison ruht die App komplett (kein Bluetooth, kein GPS, kein Dienst). Im Vorlauf vor Saisonbeginn lädt sie im Hintergrund (nur WLAN) die Straßendaten rund um den letzten Standort, auch wenn "Auch im Hintergrund vorladen" aus ist. Importierte Touren laden immer sofort. Endet die Saison, während die App läuft, beendet sie sich von selbst (Prüfung einmal pro Minute).
+- Übersicht und Karte zeigen Klartext: "Außerhalb der Saison", "Die App ruht bis zum Saisonbeginn am 1. März. Straßendaten laden ab 8. Februar."
+
+## v0.11.20
+- Schalter neu aufgeteilt. "HUD verbinden" steuert nur noch die Bluetooth-Verbindung zum HUD und bleibt gespeichert. Ohne HUD läuft die App weiter und lädt Straßendaten (Umkreis und Touren). "Bridge aktiv" heißt jetzt "App aktiv": Aus = die App ruht komplett (kein Bluetooth, kein GPS, kein Laden), das HUD ist frei für die Tilsberk-App; nur das Laden im Hintergrund per WLAN läuft weiter, falls eingeschaltet.
+- GPS in drei Stufen: mit HUD jede Sekunde; ohne HUD unterwegs alle 30 s, im Stand alle 5 min. Im Sparmodus hört die App zusätzlich auf Ortungen anderer Apps (zum Beispiel OSMAnd), das kostet nichts. Grobe Ortungen (über 200 m ungenau) werden ignoriert.
+- Der Dienst läuft ohne HUD weiter, solange das Vorladen über 0 km steht oder eine Tour offen ist. Ist HUD verbinden aus und es gibt nichts zu laden, beendet er sich selbst. Ist das HUD an, aber nicht in Reichweite, und es gibt nichts zu laden, endet er wie bisher nach 10 Minuten.
+- Statuszeile oben: "App ruht, HUD frei", "Kein HUD verbunden", "Kein HUD verbunden, Straßendaten laden läuft". "Dienst gestoppt" gibt es nicht mehr. "Dienst beendet" steht nur noch im Protokoll, wenn der Dienst wirklich lief.
+- Die Benachrichtigung zeigt ohne HUD "Ohne HUD: lädt Straßendaten, Standort im Sparmodus".
+
+## v0.11.19
+- Übersicht, Live: "Straßendaten laden" ist jetzt ein echter Ticker. Es gibt eine Zeile pro offenem Punkt: "Straßendaten Tour „Name“" (darunter "27 von 123 Kacheln") für jede offene Tour, dann "Straßendaten Umkreis". Was gerade geladen wird, steht oben. Fertiges verschwindet, ist alles fertig, ist keine Zeile mehr da. Der Umkreis trägt den Zusatz "(wartet auf Tour)", solange eine Tour offen ist.
+- Die Tour-Zahl zieht jetzt nach jeder geladenen Kachel nach.
+
+## v0.11.18
+- Protokoll: Wiederholungen werden zusammengefasst, statt sie wegzulassen. Beispiele: "OSMAnd: 48 Verbindungsversuche in 17 min", "Tour vorladen: 7 Fehlversuche (6x timeout, 1x HTTP 403), danach ging es weiter". Die erste Zeile jeder Störung steht weiter einzeln drin.
+- Neuer Schalter "Ausführliches Protokoll" (Werkzeuge, Karte Protokoll): schreibt jede Zeile einzeln, für die Fehlersuche.
+- Die Protokolldatei darf jetzt etwa 5 MB groß werden (vorher 1 MB). Danach wird wie bisher die ältere Hälfte verworfen.
+
+## v0.11.17
+- Protokoll zeigt den Fortschritt: "Tour „Name“: 37 von 123 Kacheln da" (alle 10 Kacheln), "Tour vorladen: alle Kacheln da", "Vorladen: 150 von 1711 Kacheln" (alle 50). Das Laden im Hintergrund schreibt Anfang und Ende ("Hintergrund-Laden beendet: 12 Kacheln neu geladen").
+- Fehlermeldungen beim Laden nennen jetzt den Server (zum Beispiel "overpass-api.de: HTTP 403").
+- Weist ein Server uns ab (HTTP 403 oder 429), wird er 15 Minuten pausiert statt 3.
+- HUD: ein früher gemerktes Gerät, das kein HUD ist (zum Beispiel der Lautsprecher aus v0.11.15), wird vergessen. Der Dienst startet dann nicht mehr von selbst damit. Ein von Hand gewähltes Gerät bleibt gemerkt.
+
+## v0.11.16
+- Straßendaten laden: ein Server, der ausfällt oder zu langsam ist, wird ein paar Minuten übersprungen, statt ihn immer wieder zu probieren. Vorladen und Touren warten bei einem Server höchstens 15 s.
+- Mehr Server in der Liste (lz4.overpass-api.de, z.overpass-api.de, overpass.openstreetmap.fr). Bei der Fahrt fragen die ersten drei brauchbaren gleichzeitig, fällt einer aus, rückt der nächste nach.
+- Protokoll: "OSMAnd nicht erreichbar" steht nur noch einmal drin statt alle 10 Sekunden.
+- HUD verbinden: Die App bietet nur noch Geräte mit HUD-Namen an (TILS, Head-Up, DVISION). Findet sie keins, kommt der Hinweis "Kein HUD gefunden"; alle gekoppelten Geräte (z. B. Lautsprecher) erscheinen nur noch auf Knopfdruck.
+
+## v0.11.15
+- Reiter Tempolimit: kurze Erklärkarte oben ("Diese App zeigt keine Karte. Sie lädt Straßendaten …"). "Karten" heißt jetzt überall "Straßendaten" (Straßendaten vorladen, Speicher für Straßendaten, Straßendaten laden).
+- Übersicht, Live: die Zeile "OSMAnd" zeigt nur noch den Zustand (Verbunden, Verbinde, Nicht verbunden, Aus). Die Ansagen stehen weiter im Protokoll.
+- Werkzeuge: "OSMAnd-Navigation übernehmen" heißt jetzt "Navigation aus OSMAnd" und steht direkt unter "Einrichtung".
+
+## v0.11.14
+- Neue Karte "Tour vorladen" (Tempolimit): GPX-Datei wählen (Calimoto, Kurviger, Motobit und andere), die App lädt die Karte entlang der Strecke (Rand 1,5 km, bei Dateien mit nur wenigen Punkten 3 km). Gibt es in der Datei eine Aufzeichnung (Track), gilt sie, sonst die Route. Schon gespeicherte Kacheln (unter 90 Tage) werden übersprungen. Die Tour hat Vorrang vor dem Kreis, lädt auch im Hintergrund (nur WLAN) und zeigt den Stand ("123 von 249 Kacheln"). Eine Tour verschwindet, sobald alle Kacheln da sind. "Touren in Arbeit abbrechen" entfernt die offenen Touren, gespeicherte Kacheln bleiben.
+
+## v0.11.13
+- Neue Karte "Speicher für Karten" (Tempolimit): Regler 0,5 / 1 / 2 / 5 / 10 GB (Standard 2 GB), darunter "Belegt: … MB, … Kacheln". Ist der Platz voll, werden die ältesten Kacheln gelöscht, bei kleinerer Einstellung sofort. Vorher gab es nur eine feste Grenze von 3000 Kacheln.
+- Die Kacheln liegen jetzt im App-Speicher statt im Cache-Ordner. Android leert ihn nicht von selbst, auch "Cache leeren" löscht sie nicht mehr. Vorhandene Kacheln werden beim ersten Start verschoben.
+- Vorladen überspringt Kacheln, die jünger als 90 Tage sind (vorher 30 Tage). Die Kacheln bleiben weiterhin 180 Tage gültig.
+
+## v0.11.12
+- Übersicht, Karte "Live": neue Zeile "Karte vorladen" mit dem Stand (zum Beispiel "123 von 452 Kacheln", "Fertig …", "Wartet auf WLAN").
+- Vorladen: Der Kreis wird jetzt schon nach 3 km Fahrt neu um den aktuellen Standort gelegt (vorher 10 km).
+- Vorladen: Unterwegs werden zusätzlich die Kacheln in einem Streifen von 20 km in Fahrtrichtung vorgezogen (nur über WLAN bzw. mit erlaubtem Mobilfunk, nicht im Roaming). Das Gebiet in Fahrtrichtung kommt damit vor dem Rest des Kreises.
+
+## v0.11.11
+- Das Vorladen im Hintergrund läuft jetzt auch, wenn "Bridge aktiv" aus ist (das HUD wird dabei nicht berührt, nur WLAN). Hinweistexte, README angepasst.
+
+## v0.11.10
+- Neuer Schalter "Auch im Hintergrund vorladen" (Tempolimit, Gebiet vorladen): Das Vorladen läuft dann auch ohne laufenden Dienst und ohne HUD, solange Android es erlaubt (nur WLAN, Akku nicht schwach, alle 6 Stunden und kurz nach dem Einschalten). Nutzt den zuletzt gemerkten Standort. Läuft der Dienst, übernimmt dieser.
+- Neue Bibliothek: androidx.work (WorkManager) für den Hintergrund-Auftrag.
+
 ## v0.11.9
 - Vorladen: Schlägt ein Server fehl, wird sofort der nächste der drei Server probiert (nacheinander).
 - Das Protokoll nennt bei fehlgeschlagenem Vorladen jetzt den genauen Grund (zum Beispiel "HTTP 429").

@@ -16,7 +16,7 @@ object BridgeBus {
     private const val TAG = "OSMAndHudBridge"
     private const val MAX_LINES = 300
     private const val LOG_NAME = "osmand-hud-bridge-log.txt"
-    private const val MAX_BYTES = 1_000_000 // danach wird die ältere Hälfte verworfen
+    private const val MAX_BYTES = 5_000_000 // danach wird die ältere Hälfte verworfen
     private val main = Handler(Looper.getMainLooper())
     private val lines = ArrayDeque<String>()
     private val fmt = SimpleDateFormat("HH:mm:ss", Locale.GERMANY)
@@ -27,6 +27,7 @@ object BridgeBus {
     /** Schaltet das Mitschreiben in eine Textdatei ein (bleibt über App-Neustarts erhalten, höchstens ca. 1 MB). */
     @Synchronized
     fun init(ctx: Context) {
+        verbose = ctx.applicationContext.getSharedPreferences("bridge", Context.MODE_PRIVATE).getBoolean("log_verbose", false)
         if (file != null) return
         val f = File(ctx.applicationContext.filesDir, LOG_NAME)
         file = f
@@ -63,6 +64,8 @@ object BridgeBus {
     @Volatile var osm = "OSMAnd: –"
     @Volatile var limit = "Limit: –"
     @Volatile var preload = "–"
+    /** Ausführliches Protokoll: jede Wiederholung einzeln, nichts wird zusammengefasst. */
+    @Volatile var verbose = false
     @Volatile var onChange: (() -> Unit)? = null
 
     /** Status des Vorladens (nur anzeigen, kein Logeintrag). */
@@ -100,6 +103,10 @@ object BridgeBus {
 
     @Synchronized
     fun lastLines(n: Int): String = lines.toList().takeLast(n).joinToString("\n")
+
+    /** Die letzten [n] Zeilen, die neueste zuerst (für die Anzeige in der App; die Datei bleibt zeitlich geordnet). */
+    @Synchronized
+    fun lastLinesNewestFirst(n: Int): String = lines.toList().takeLast(n).asReversed().joinToString("\n")
 
     @Synchronized
     fun render(): String {
