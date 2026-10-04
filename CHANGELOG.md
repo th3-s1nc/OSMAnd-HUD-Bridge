@@ -2,6 +2,18 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.38
+- Kreisverkehr und Abbiegungen bleiben am HUD stehen, auch wenn OSMAnd länger nichts meldet (im Hintergrund kamen Pausen bis über 30 s vor). Vorher wurde das HUD nach 10 s Stille geleert, und damit war auch die Ausfahrt-Nummer weg. Jetzt zählt die Entfernung mit dem GPS-Tempo weiter herunter (vorher nur 4 s lang) und wird erst nach 60 s ohne Meldung geleert.
+- Log: "OSMAnd war X s still", wenn nach mehr als 10 s wieder eine Meldung kommt.
+
+## v0.11.37
+- Übersicht: Kommen die OSMAnd-Benachrichtigungen nicht an (Zugriff fehlt oder ist nach einem Update nicht verbunden), zeigt ein orange umrandeter Hinweis das an. Ein Tipp darauf öffnet die Android-Einstellung, dort den Zugriff für die App aus- und wieder einschalten. Der Hinweis verschwindet von selbst, sobald die Verbindung steht.
+- Abbiegedistanz am HUD: Die Hochrechnung zwischen zwei OSMAnd-Meldungen nimmt jetzt das aktuelle Tempo (statt der aus den letzten Meldungen errechneten Geschwindigkeit) und zieht 0,8 s Meldeverzögerung ab. Die Anzeige hing sonst 10 bis 30 m hinterher. Bei frischen Meldungen springt die Anzeige nicht mehr zurück.
+
+## v0.11.36
+- Neu: Schalter "Akustische Warnung" bei der Tempowarnung (standardmäßig aus). Doppelpiepen, einmal pro Überschreitung (Limit + eingestellte Überschreitung, mindestens 1,5 s lang) und erst wieder, nachdem das Tempo auf oder unter das Limit gefallen ist. Der Ton läuft wie eine Navigationsansage (Musik wird kurz leiser) über das Handy, z. B. zur Intercom. Nur mit verbundenem HUD und nur bei einem Limit aus den Kartendaten, nicht bei einem geschätzten.
+- Die App liest beim Start und beim Verbinden des Benachrichtigungszugriffs die schon vorhandene OSMAnd-Benachrichtigung nach. Damit klappt es auch, wenn OSMAnd vor der Bridge gestartet wurde.
+
 ## v0.11.35
 - Neu: Quadratischer Knopf mit Navigationspfeil rechts neben dem Status ("Verbunden und bereit") auf der Übersicht. Ein Tipp öffnet OSMAnd. Ist OSMAnd nicht installiert, erscheint eine kurze Meldung.
 

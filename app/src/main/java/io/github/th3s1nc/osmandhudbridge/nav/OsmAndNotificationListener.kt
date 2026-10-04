@@ -17,13 +17,29 @@ class OsmAndNotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         connected = true
+        instance = this
         BridgeBus.init(applicationContext)
         BridgeBus.log("Benachrichtigungszugriff aktiv")
+        BridgeBus.changed()
+        snapshot()
     }
 
     override fun onListenerDisconnected() {
         connected = false
+        instance = null
         BridgeBus.log("Benachrichtigungszugriff getrennt")
+        BridgeBus.changed()
+    }
+
+    /** Liest die schon vorhandene OSMAnd-Benachrichtigung (Android liefert sonst nur neu eintreffende). */
+    fun snapshot() {
+        try {
+            if (!getSharedPreferences(BridgeService.PREFS, MODE_PRIVATE).getBoolean(BridgeService.KEY_ENABLED, true)) return
+            last = ""
+            activeNotifications?.filter { it.packageName in OSMAND_PACKAGES }?.forEach { processOsmand(it) }
+        } catch (e: Exception) {
+            BridgeBus.log("Vorhandene Benachrichtigungen nicht lesbar (${e.message})")
+        }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -33,6 +49,10 @@ class OsmAndNotificationListener : NotificationListenerService() {
         if (n.packageName in WHATSAPP_PACKAGES) { handleMessage(n); return }
         if (n.notification.category == Notification.CATEGORY_CALL) { handleCall(n); return }
         if (n.packageName !in OSMAND_PACKAGES) return
+        processOsmand(n)
+    }
+
+    private fun processOsmand(n: StatusBarNotification) {
         val e = n.notification.extras ?: return
         val parts = listOf(
             Notification.EXTRA_TITLE, Notification.EXTRA_TEXT, Notification.EXTRA_SUB_TEXT,
@@ -111,6 +131,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
     companion object {
         /** true, solange Android die Benachrichtigungen an diese App liefert (nach einem Update oft erst nach neuem Verbinden). */
         @Volatile var connected = false
+        @Volatile var instance: OsmAndNotificationListener? = null
 
         private val OSMAND_PACKAGES = setOf("net.osmand", "net.osmand.plus", "net.osmand.dev")
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")

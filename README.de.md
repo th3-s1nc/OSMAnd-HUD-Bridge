@@ -12,6 +12,7 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 - Vier Anzeigemodi (Navigator, Minimalist, Explorer, City), in der App wählbar und gespeichert. Straßennamen (aktuelle und nächste Straße) zeigt das HUD nur im Modus City, Anrufe, Nachrichten und Musik nur in Explorer und City.
 - Optional: dauerhafter Geradeaus-Pfeil zwischen den Abbiegungen, damit man auf langen Geraden sieht, dass die Navigation läuft.
 - Auf der Übersicht öffnet ein Knopf neben dem Status OSMAnd direkt.
+- Optional: akustische Warnung (Doppelpiepen, einmal pro Überschreitung) über das Handy, z. B. zur Intercom.
 - Läuft als Vordergrunddienst auch bei ausgeschaltetem Display, verbindet sich selbst neu und zeigt lieber nichts als etwas Falsches.
 - Auch ohne verbundenes HUD kann die App Straßendaten laden. Dann fragt sie das GPS nur selten ab (Sparmodus), mit HUD jede Sekunde.
 - **Saisonfahrer:** Wer nur von Monat bis Monat fährt, stellt die Saison ein. Außerhalb der Saison ruht die App, einige Wochen vor Saisonbeginn lädt sie die Straßendaten im Umkreis.

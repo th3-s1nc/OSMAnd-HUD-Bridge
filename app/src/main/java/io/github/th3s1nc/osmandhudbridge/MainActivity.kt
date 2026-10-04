@@ -53,6 +53,9 @@ class MainActivity : AppCompatActivity() {
         tvHud = findViewById(R.id.tvHud)
         dotHud = findViewById(R.id.dotHud)
         findViewById<View>(R.id.btnOpenOsmand).setOnClickListener { openOsmand() }
+        findViewById<View>(R.id.tvNotifHint).setOnClickListener {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
         tvServiceHint = findViewById(R.id.tvServiceHint)
         tvGps = findViewById(R.id.tvGps)
         tvLimit = findViewById(R.id.tvLimit)
@@ -199,9 +202,17 @@ class MainActivity : AppCompatActivity() {
         warnText(tol)
         swWarn.isChecked = prefs.getBoolean(BridgeService.KEY_WARN, true)
         sldWarn.isEnabled = swWarn.isChecked
+        val swWarnSound = findViewById<MaterialSwitch>(R.id.chkWarnSound)
+        swWarnSound.isChecked = prefs.getBoolean(BridgeService.KEY_WARN_SOUND, false)
+        swWarnSound.isEnabled = swWarn.isChecked
+        swWarnSound.setOnCheckedChangeListener { _, on ->
+            prefs.edit().putBoolean(BridgeService.KEY_WARN_SOUND, on).apply()
+            applyConfigIfRunning()
+        }
         swWarn.setOnCheckedChangeListener { _, on ->
             prefs.edit().putBoolean(BridgeService.KEY_WARN, on).apply()
             sldWarn.isEnabled = on
+            swWarnSound.isEnabled = on
             applyConfigIfRunning()
         }
         sldWarn.addOnChangeListener { _, value, fromUser ->
@@ -625,7 +636,22 @@ class MainActivity : AppCompatActivity() {
         else -> "–"
     }
 
+    /** Hinweis auf der Übersicht, wenn die Benachrichtigungen von OSMAnd nicht ankommen (Tempo, Restzeit, Ankunft fehlen dann). */
+    private fun updateNotifHint() {
+        val tv = findViewById<TextView>(R.id.tvNotifHint)
+        val needed = BridgeService.running && prefs.getBoolean(BridgeService.KEY_ENABLED, true) &&
+            !io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.connected
+        if (!needed) { tv.visibility = View.GONE; return }
+        val granted = try {
+            androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+        } catch (_: Exception) { false }
+        tv.text = if (granted) "Benachrichtigungen kommen nicht an: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen, dann den Zugriff für diese App aus- und wieder einschalten."
+        else "Benachrichtigungszugriff fehlt: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen und den Zugriff erlauben."
+        tv.visibility = View.VISIBLE
+    }
+
     private fun refresh() {
+        updateNotifHint()
         val hud = BridgeBus.hud.removePrefix("HUD: ")
         val running = BridgeService.running
         val enabled = prefs.getBoolean(BridgeService.KEY_ENABLED, true)

@@ -10,8 +10,8 @@ android {
         applicationId = "io.github.th3s1nc.osmandhudbridge"
         minSdk = 26
         targetSdk = 34
-        versionCode = 65
-        versionName = "0.11.35"
+        versionCode = 68
+        versionName = "0.11.38"
     }
     buildTypes {
         release { isMinifyEnabled = false }

@@ -54,6 +54,7 @@ class BridgeService : Service(), HudClient.Listener {
     private lateinit var limitProvider: io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider
     private var speedFromOsmand = false
     private var useOsmand = true
+    private var beeper: SpeedBeeper? = null
     private var lastAidlNavAt = 0L
     private var notifNavActive = false
     private var lastGpsKmh = 0f
@@ -127,6 +128,10 @@ class BridgeService : Service(), HudClient.Listener {
         handler = Handler(Looper.getMainLooper())
         client = HudClient(applicationContext, this)
         controller = HudController(client)
+        controller.onOverspeed = {
+            val b = beeper ?: SpeedBeeper(applicationContext, handler).also { beeper = it }
+            b.beep()
+        }
         client.mode = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(prefs.getString(KEY_MODE, null))
         controller.setModeSilently(client.mode)
         limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext), { kmh, est -> controller.setLimit(kmh, est) }, { controller.setCurrentStreet(it) })
@@ -408,6 +413,8 @@ class BridgeService : Service(), HudClient.Listener {
         if (granted && !io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.connected) {
             try { android.service.notification.NotificationListenerService.requestRebind(cn) } catch (_: Exception) {}
         }
+        // Was OSMAnd schon in der Leiste hatte, bevor die Bridge lief, jetzt einmal nachlesen
+        handler.postDelayed({ io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.instance?.snapshot() }, 1_000)
         handler.postDelayed({
             if (io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.connected) return@postDelayed
             BridgeBus.log(
@@ -445,6 +452,7 @@ class BridgeService : Service(), HudClient.Listener {
         limitProvider.enabled = sp.getBoolean(KEY_OSM_LIMIT, true)
         controller.setMode(io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(sp.getString(KEY_MODE, null)))
         controller.setWarn(sp.getBoolean(KEY_WARN, true), sp.getInt(KEY_WARN_TOL, DEFAULT_WARN_TOL))
+        controller.acousticWarn = sp.getBoolean(KEY_WARN_SOUND, false)
         controller.setBrightness(if (sp.getBoolean(KEY_BRIGHT_AUTO, true)) -1 else sp.getInt(KEY_BRIGHT_STEP, 1).coerceIn(0, 2))
         if (!controller.setJustage(sp.getBoolean(KEY_JUSTAGE, false))) {
             sp.edit().putBoolean(KEY_JUSTAGE, false).apply() // HUD nicht verbunden: Schalter zurücksetzen
@@ -584,6 +592,7 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_SEASON_LEAD = "season_lead_weeks" // Wochen vor Saisonbeginn, ab denen Straßendaten geladen werden
         const val KEY_HUD_ON = "hud_on" // Schalter "HUD verbinden" (nur die Bluetooth-Verbindung)
         const val KEY_PRELOAD_BG = "preload_background" // Vorladen auch ohne laufenden Dienst (WorkManager)
+        const val KEY_WARN_SOUND = "warn_sound" // Warnton bei Überschreitung
         const val KEY_WARN = "warn_enabled"
         const val KEY_WARN_TOL = "warn_tolerance" // km/h, 0..30
         const val DEFAULT_WARN_TOL = 10

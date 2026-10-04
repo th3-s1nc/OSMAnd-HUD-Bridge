@@ -33,6 +33,11 @@ class HudController(private val client: HudClient) {
     private var rate = 0f // Meter pro Sekunde, aus den letzten beiden Meldungen
     var threshold: ThresholdMode = ThresholdMode.NORMAL
 
+    /** Warnton bei Tempoüberschreitung (zusätzlich zur Anzeige am HUD). */
+    var acousticWarn = false
+    var onOverspeed: (() -> Unit)? = null
+    private val alarm = io.github.th3s1nc.osmandhudbridge.limit.OverspeedAlarm()
+
     /** Zwischen den Abbiegungen dauerhaft den Geradeaus-Pfeil zeigen (ohne Distanz), solange OSMAnd frische Daten liefert. */
     var keepStraight = false
         set(v) {
@@ -154,6 +159,8 @@ class HudController(private val client: HudClient) {
         // Zielflagge läuft noch: späte OSMAnd-Meldungen dürfen sie nicht überschreiben
         if (want.command == NavCommand.GOAL && navDeadline != 0L && now < navDeadline) return
         val prev = refMeters
+        if (refAt != 0L && now - refAt > 10_000L && meters != null)
+            BridgeBus.log("OSMAnd war ${(now - refAt) / 1000} s still")
         if (extrapolate && meters != null && command != null) {
             if (prev != null && command == refCommand) {
                 val dt = (now - refAt) / 1000f
@@ -168,7 +175,11 @@ class HudController(private val client: HudClient) {
         } else {
             refMeters = null; rate = 0f; refCommand = null
         }
-        want = want.copy(partDistanceM = meters, command = command, roundaboutExit = exit)
+        // Frische Meldung: auch hier die Zeit abziehen, die sie schon unterwegs war (sonst springt die Anzeige zurück)
+        val shown = if (extrapolate && meters != null && command != null)
+            io.github.th3s1nc.osmandhudbridge.protocol.NavExtrapolation.distance(meters, 0f, want.speedKmh, rate)
+        else meters
+        want = want.copy(partDistanceM = shown, command = command, roundaboutExit = exit)
         navDeadline = if (ttlMs == null || (meters == null && command == null)) 0L
         else SystemClock.elapsedRealtime() + ttlMs
         flush()
@@ -319,9 +330,9 @@ class HudController(private val client: HudClient) {
     fun tick() {
         val now = SystemClock.elapsedRealtime()
         val ref = refMeters
-        if (ref != null && rate > 0f && want.command != null) {
-            val elapsed = minOf((now - refAt) / 1000f, MAX_EXTRAPOLATE_S)
-            want = want.copy(partDistanceM = maxOf(0, ref - (rate * elapsed).toInt()))
+        if (ref != null && want.command != null) {
+            val d = io.github.th3s1nc.osmandhudbridge.protocol.NavExtrapolation.distance((ref), (now - refAt) / 1000f, want.speedKmh, rate)
+            if (d != want.partDistanceM) want = want.copy(partDistanceM = d)
         }
         if (navDeadline != 0L && now > navDeadline) {
             BridgeBus.log("Navigationsdaten veraltet, HUD-Anzeige geleert")
@@ -332,6 +343,13 @@ class HudController(private val client: HudClient) {
         if (callClearAt != 0L && now > callClearAt) showNotice(true, null, true)
         if (msgClearAt != 0L && now > msgClearAt) showNotice(false, null, true)
         musicStep(now)
+        // Warnton: nur mit HUD (dann kommt das Tempo jede Sekunde), nur bei echtem Limit aus den Kartendaten
+        if (acousticWarn && want.warnEnabled && !want.limitEstimated && client.isReady) {
+            if (alarm.update(want.speedKmh, want.speedLimitKmh, want.warnToleranceKmh, now)) {
+                BridgeBus.log("Tempo ${want.speedKmh.toInt()} bei Limit ${want.speedLimitKmh}: Warnton")
+                onOverspeed?.invoke()
+            }
+        } else alarm.pause()
         if (client.isReady && now - lastSendAt > KEEPALIVE_MS) {
             // Lebenszeichen: Uhrzeit erneut senden. Das HUD quittiert, ein totes Gerät fällt so auf.
             sent = sent - HudProtocol.F_TIME
@@ -373,7 +391,7 @@ class HudController(private val client: HudClient) {
     }
 
     private companion object {
-        const val NAV_TTL_MS = 10_000L
+        const val NAV_TTL_MS = 60_000L
         const val MAX_EXTRAPOLATE_S = 4f
         const val KEEPALIVE_MS = 10_000L
         const val CALL_MAX_S = 120
