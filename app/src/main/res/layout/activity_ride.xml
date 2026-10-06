@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fitsSystemWindows="true"
+    android:orientation="vertical">
+    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:clipToPadding="false">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/btnBack" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center_vertical" android:text="←" android:textColor="#FFFFFF" android:textSize="24sp" android:clickable="true" android:focusable="true" android:contentDescription="Zurück" />
+                <View android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                <TextView android:id="@+id/btnDelete" android:layout_width="wrap_content" android:layout_height="48dp" android:gravity="center_vertical" android:text="Löschen" android:textColor="#E5484D" android:textStyle="bold" android:clickable="true" android:focusable="true" />
+            </LinearLayout>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical">
+                <TextView android:id="@+id/tvTitle" style="@style/TextAppearance.Material3.HeadlineSmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:textStyle="bold" android:textColor="#FFFFFF" />
+                <TextView android:id="@+id/btnRename" android:layout_width="48dp" android:layout_height="48dp" android:gravity="center" android:text="✎" android:textColor="#A8A8B0" android:textSize="20sp" android:clickable="true" android:focusable="true" android:contentDescription="Umbenennen" />
+            </LinearLayout>
+            <TextView android:id="@+id/tvDate" style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#A8A8B0" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="12dp">
+                <TextView android:id="@+id/tvChipDist" style="@style/TextAppearance.Material3.TitleSmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:layout_marginEnd="4dp" android:background="@drawable/bg_tile" android:gravity="center" android:textColor="#FFFFFF" android:textStyle="bold" />
+                <TextView android:id="@+id/tvChipTime" style="@style/TextAppearance.Material3.TitleSmall" android:layout_width="0dp" android:layout_weight="1" android:layout_height="40dp" android:layout_marginStart="4dp" android:background="@drawable/bg_tile" android:gravity="center" android:textColor="#FFFFFF" android:textStyle="bold" />
+            </LinearLayout>
+            <io.github.th3s1nc.osmandhudbridge.track.RouteMapView android:id="@+id/map" android:layout_width="match_parent" android:layout_height="200dp" android:layout_marginTop="12dp" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnOpenMap" style="@style/Widget.HudBridge.Button.Primary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="In Karten-App ansehen" />
+            <com.google.android.material.button.MaterialButton android:id="@+id/btnShare" style="@style/Widget.HudBridge.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Teilen (GPX oder CSV)" />
+            <TextView android:id="@+id/tvStatsTitle" style="@style/TextAppearance.Material3.HeadlineSmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:textStyle="bold" android:textColor="#FFFFFF" android:text="Statistiken" />
+            <TextView style="@style/TextAppearance.Material3.BodyMedium" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#A8A8B0" android:text="Alles über deine Fahrt" />
+            <LinearLayout android:id="@+id/tiles" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="12dp" />
+            <LinearLayout android:id="@+id/charts" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp" />
+            <TextView android:id="@+id/tvHint" style="@style/TextAppearance.Material3.BodySmall" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:layout_marginBottom="24dp" android:textColor="#A8A8B0" android:text="Antippen oder Wischen über ein Diagramm zeigt den Wert (blau). Die Markierung läuft in allen Diagrammen und auf der Karte mit. Die Kartenbilder kommen von OpenStreetMap und brauchen beim ersten Öffnen Internet." />
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

@@ -144,6 +144,33 @@ class HudController(private val client: HudClient) {
         flush()
     }
 
+    /** Gefahrene Strecke (m), gefahrene Zeit (min) und Höhe (m) für Guide und Cruiser. */
+    fun setTrip(distanceM: Int, minutes: Int, elevationM: Int? = null) {
+        val w = want
+        if (w.tripDistanceM == distanceM && w.tripMinutes == minutes && w.elevationM == elevationM) return
+        want = w.copy(tripDistanceM = distanceM, tripMinutes = minutes, elevationM = elevationM)
+        if (mode.usesTextSlots) flush()
+    }
+
+    /** Kein GPS-Empfang (länger keine Position): das HUD zeigt sein Warnsymbol (nur Guide und Cruiser). */
+    fun setGpsLost(lost: Boolean) {
+        if (want.gpsLost == lost) return
+        want = want.copy(gpsLost = lost)
+        if (mode.usesTextSlots) flush()
+    }
+
+    /** Gewählte Zeilen von Guide/Cruiser haben sich geändert: Textfelder neu senden, dann alle Felder. */
+    fun slotsChanged() {
+        if (!client.isReady || justage || !mode.usesTextSlots) return
+        if (client.send(listOf(HudProtocol.textSlots()))) {
+            sent = emptyMap()
+            flush()
+        } else BridgeBus.log("Zeilenwahl zurückgestellt")
+    }
+
+    /** Aktuelles Tempolimit für die Aufzeichnung: 0, wenn unbekannt oder nur geschätzt. */
+    fun recordLimit(): Int = if (want.limitEstimated) 0 else want.speedLimitKmh.coerceAtLeast(0)
+
     /** 0 = unbekannt. */
     fun setLimit(kmh: Int, estimated: Boolean = false) {
         want = want.copy(speedLimitKmh = kmh, limitEstimated = estimated && kmh > 0)
@@ -378,7 +405,7 @@ class HudController(private val client: HudClient) {
         if (force) sent = emptyMap()
         // Restzeit/-distanz ausblenden, solange es keine Werte gibt (sonst steht dauerhaft "0 min" da)
         val wantRoute = eff.routeMinutes != null || eff.routeDistanceM != null || eff.arrivalHour != null
-        if (routeShown != wantRoute) {
+        if (mode.routeElements.isNotEmpty() && routeShown != wantRoute) {
             if (client.send(listOf(HudProtocol.routeElements(mode, wantRoute)))) routeShown = wantRoute
         }
         val changed = HudProtocol.changedFields(sent, wantFields)

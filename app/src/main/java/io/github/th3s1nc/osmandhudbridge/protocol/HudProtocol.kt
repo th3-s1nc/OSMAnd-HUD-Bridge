@@ -40,6 +40,11 @@ object HudProtocol {
     const val F_PART_DISTANCE = 4
     const val F_POINTER = 5
     const val F_TIME = 8
+    const val F_TRIP_DISTANCE = 13
+    const val F_TRIP_DURATION = 14
+    const val F_LIMIT_SLOT = 29
+    const val F_ELEVATION = 26
+    const val F_GPS_STATE = 30
     const val F_ROUTE_DURATION = 10
     const val F_ROUTE_DISTANCE = 11
     const val F_ARRIVAL_TIME = 12
@@ -140,6 +145,31 @@ object HudProtocol {
 
     fun routeDistanceField(meters: Int?): ByteArray = Protobuf.message(F_ROUTE_DISTANCE, distanceParts(meters))
 
+    /** Gefahrene Strecke (Tracking-Testmodus), gleiche Darstellung wie die Restdistanz. */
+    fun tripDistanceField(meters: Int?): ByteArray = Protobuf.message(F_TRIP_DISTANCE, distanceParts(meters))
+
+    /** Gefahrene Zeit (Tracking-Testmodus): Stunde, Minute. */
+    fun tripDurationField(totalMinutes: Int?): ByteArray {
+        if (totalMinutes == null || totalMinutes < 0) return Protobuf.message(F_TRIP_DURATION)
+        return Protobuf.message(F_TRIP_DURATION, Protobuf.uint(1, totalMinutes / 60), Protobuf.uint(2, totalMinutes % 60))
+    }
+
+    /**
+     * Tempolimit im Tracking-Testmodus (Feld 29, im HUD als "durchschnittliches Tempo" vorgesehen, hier als Anzeige des Limits
+     * benutzt): Wert in km/h, leer solange kein Limit bekannt ist.
+     */
+    fun limitSlotField(limitKmh: Int): ByteArray =
+        if (limitKmh in 1..251) Protobuf.message(F_LIMIT_SLOT, Protobuf.uint(1, limitKmh), Protobuf.uint(2, SPEED_UNIT_KMH))
+        else Protobuf.message(F_LIMIT_SLOT)
+
+    /** Höhe in Metern (Feld 26), null = leer. Negative Höhen zeigt das HUD nicht, sie werden als 0 gesendet. */
+    fun elevationField(meters: Int?): ByteArray =
+        if (meters == null) Protobuf.message(F_ELEVATION)
+        else Protobuf.message(F_ELEVATION, Protobuf.uint(1, meters.coerceAtLeast(0)), Protobuf.uint(2, UNIT_M))
+
+    /** GPS-Status (Feld 30): true = GPS nicht verfügbar, das HUD zeigt dann sein Warnsymbol. */
+    fun gpsStateField(notAvailable: Boolean): ByteArray = Protobuf.message(F_GPS_STATE, Protobuf.uint(1, if (notAvailable) 1 else 0))
+
     /** Pfeil. Die Ausfahrtsnummer wird nur bei Kreisverkehr-Pfeilen gesendet. */
     fun pointerField(command: NavCommand?, exit: Int?): ByteArray {
         if (command == null || command == NavCommand.NONE) return Protobuf.message(F_POINTER)
@@ -213,7 +243,9 @@ object HudProtocol {
         !warnEnabled || limitKmh <= 0 || speedKmh <= limitKmh + toleranceKmh
 
     /** Alle Felder des Navigations-Bildschirms, nach Feldnummer sortiert. */
-    fun encodeState(s: HudState, mode: DisplayMode = DisplayMode.NAVIGATOR): LinkedHashMap<Int, ByteArray> {
+    fun encodeState(
+        s: HudState, mode: DisplayMode = DisplayMode.NAVIGATOR, slots: List<HudValue> = SlotConfig.slots(mode)
+    ): LinkedHashMap<Int, ByteArray> {
         val ok = s.limitEstimated || speedOk(s.speedKmh, s.speedLimitKmh, s.warnEnabled, s.warnToleranceKmh)
         val m = LinkedHashMap<Int, ByteArray>()
         m[F_SPEED] = speedField(s.speedKmh)
@@ -232,7 +264,12 @@ object HudProtocol {
         // die nächste Straße (Navigation) hat Vorrang
         m[F_NEXT_STREET] = streetField(F_NEXT_STREET, s.nextStreet)
         m[F_CURRENT_STREET] = streetField(F_CURRENT_STREET, if (s.nextStreet.isNullOrBlank()) s.currentStreet else null)
-        m.keys.retainAll(mode.fields)
+        m[F_LIMIT_SLOT] = limitSlotField(s.speedLimitKmh)
+        m[F_TRIP_DISTANCE] = tripDistanceField(s.tripDistanceM)
+        m[F_TRIP_DURATION] = tripDurationField(s.tripMinutes)
+        m[F_ELEVATION] = elevationField(s.elevationM)
+        m[F_GPS_STATE] = gpsStateField(s.gpsLost)
+        m.keys.retainAll(mode.fields + slots.map { it.field }.filter { it > 0 } + (if (mode.usesTextSlots) setOf(F_GPS_STATE) else emptySet()))
         return m
     }
 
@@ -280,9 +317,24 @@ object HudProtocol {
         else showHide(mode.screenId, mode.routeElements, emptyList())
     )
 
+    /**
+     * Textfeld-Konfiguration (Kommando 100, Unterkommando 12): sechs Zeilen, je Element-Nummer und Beschriftung.
+     * Zeilen 1-2 gehören zu Guide (Bildschirm 20), Zeilen 3-6 zum Cruiser (Bildschirm 21). Die Auswahl steht in [SlotConfig].
+     */
+    fun textSlots(): HudMessage {
+        fun slot(v: HudValue) =
+            Protobuf.message(1, Protobuf.uint(1, v.element), Protobuf.message(2, Protobuf.string(1, cleanAscii(v.label))))
+        val all = SlotConfig.slots(DisplayMode.GUIDE) + SlotConfig.slots(DisplayMode.TRACKING)
+        return command(Protobuf.message(12, *all.map { slot(it) }.toTypedArray()))
+    }
+
+    /** Nachrichten, die einen Modus einrichten: ggf. Textfelder, ShowHide, Bildschirm aktivieren. */
+    fun modeSetup(mode: DisplayMode): List<HudMessage> =
+        (if (mode.usesTextSlots) listOf(textSlots()) else emptyList()) +
+            listOf(HudMessage(showHide(mode.screenId, mode.hide, mode.show)), activateScreen(mode.screenId))
+
     /** Moduswechsel: ShowHide-Nachricht, dann Bildschirm aktivieren. */
-    fun switchMode(mode: DisplayMode): List<HudMessage> =
-        listOf(HudMessage(showHide(mode.screenId, mode.hide, mode.show)), activateScreen(mode.screenId))
+    fun switchMode(mode: DisplayMode): List<HudMessage> = modeSetup(mode)
 
     fun activateScreen(screen: Int) = command(Protobuf.message(5, Protobuf.uint(1, screen)))
 
@@ -307,20 +359,17 @@ object HudProtocol {
 
     /** Justage beenden: Konfiguration lesen, Elemente des Modus setzen, Bildschirm des Modus aktivieren. */
     fun leaveJustage(mode: DisplayMode): List<HudMessage> =
-        listOf(readConfig(), HudMessage(showHide(mode.screenId, mode.hide, mode.show)), activateScreen(mode.screenId))
+        listOf(readConfig()) + modeSetup(mode)
 
     const val JUSTAGE_SCREEN = 1
 
     /** Ablauf direkt nach dem Verbinden (Navigations-Bildschirm 13). [brightnessStep]: -1 = automatisch, 0..2 = manuell. */
-    fun handshake(hour: Int, minute: Int, mode: DisplayMode = DisplayMode.NAVIGATOR, brightnessStep: Int = -1): List<HudMessage> = listOf(
-        navigationFinished(),
-        readConfig(),
-        HudMessage(
-            Protobuf.concat(
-                listOf(timeField(hour, minute), showHide(mode.screenId, mode.hide, mode.show))
+    fun handshake(hour: Int, minute: Int, mode: DisplayMode = DisplayMode.NAVIGATOR, brightnessStep: Int = -1): List<HudMessage> =
+        listOf(navigationFinished(), readConfig()) +
+            (if (mode.usesTextSlots) listOf(textSlots()) else emptyList()) +
+            listOf(
+                HudMessage(Protobuf.concat(listOf(timeField(hour, minute), showHide(mode.screenId, mode.hide, mode.show)))),
+                activateScreen(mode.screenId),
+                brightness(brightnessStep)
             )
-        ),
-        activateScreen(mode.screenId),
-        brightness(brightnessStep)
-    )
 }

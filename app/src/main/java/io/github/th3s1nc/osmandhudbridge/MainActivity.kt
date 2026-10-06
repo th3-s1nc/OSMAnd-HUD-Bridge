@@ -9,9 +9,13 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
+import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,7 +30,13 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.google.android.material.card.MaterialCardView
 import io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode
+import io.github.th3s1nc.osmandhudbridge.protocol.HudValue
 import io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode
+import io.github.th3s1nc.osmandhudbridge.track.Ride
+import io.github.th3s1nc.osmandhudbridge.track.RideFormat
+import io.github.th3s1nc.osmandhudbridge.track.RideStore
+import io.github.th3s1nc.osmandhudbridge.track.TrackRecorder
+import io.github.th3s1nc.osmandhudbridge.track.TrackSession
 
 class MainActivity : AppCompatActivity() {
     private lateinit var tvHud: TextView
@@ -65,9 +75,11 @@ class MainActivity : AppCompatActivity() {
         setupNavigation()
         setupHome()
         setupDisplay()
+        setupInfoButtons()
         setupSettings()
         setupTools()
         setupInfo()
+        setupTracking()
     }
 
     override fun onStart() {
@@ -75,38 +87,101 @@ class MainActivity : AppCompatActivity() {
         BridgeBus.onChange = { refresh() }
         autoConnect()
         refresh()
+        trackHandler.post(trackTick)
+        refreshRides()
+        offerUnfinishedRide()
     }
 
     override fun onStop() {
         BridgeBus.onChange = null
+        trackHandler.removeCallbacks(trackTick)
         super.onStop()
     }
 
     // ---------------- Aufbau ----------------
 
-    private fun setupNavigation() {
-        pages = listOf(
-            findViewById(R.id.pageHome), findViewById(R.id.pageDisplay),
-            findViewById(R.id.pageSettings), findViewById(R.id.pageTools), findViewById(R.id.pageInfo)
-        )
-        val nav = findViewById<BottomNavigationView>(R.id.bottomNav)
-        nav.setOnItemSelectedListener { item ->
-            val idx = when (item.itemId) {
-                R.id.nav_display -> 1
-                R.id.nav_settings -> 2
-                R.id.nav_tools -> 3
-                R.id.nav_info -> 4
-                else -> 0
-            }
-            pages.forEachIndexed { i, v -> v.visibility = if (i == idx) View.VISIBLE else View.GONE }
-            true
+    private var currentPage = 0
+
+    /** Seiten: 0 Übersicht, 1 Anzeige, 2 Tempolimit, 3 Werkzeuge, 4 Info (Knopf oben rechts), 5 Tracking. */
+    private fun showPage(idx: Int) {
+        currentPage = idx
+        pages.forEachIndexed { i, v -> v.visibility = if (i == idx) View.VISIBLE else View.GONE }
+        infoBackCallback.isEnabled = idx == 4
+    }
+
+    private fun pageForNav(itemId: Int): Int = when (itemId) {
+        R.id.nav_display -> 1
+        R.id.nav_settings -> 2
+        R.id.nav_tools -> 3
+        R.id.nav_tracking -> 5
+        else -> 0
+    }
+
+    private val infoBackCallback = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            showPage(pageForNav(findViewById<BottomNavigationView>(R.id.bottomNav).selectedItemId))
         }
     }
 
+    private fun setupNavigation() {
+        pages = listOf(
+            findViewById(R.id.pageHome), findViewById(R.id.pageDisplay),
+            findViewById(R.id.pageSettings), findViewById(R.id.pageTools), findViewById(R.id.pageInfo),
+            findViewById(R.id.pageTracking)
+        )
+        val nav = findViewById<BottomNavigationView>(R.id.bottomNav)
+        nav.setOnItemSelectedListener { item ->
+            showPage(pageForNav(item.itemId))
+            true
+        }
+        // Erneutes Antippen des gewählten Tabs holt ihn aus der Info-Seite zurück
+        nav.setOnItemReselectedListener { item -> showPage(pageForNav(item.itemId)) }
+        findViewById<View>(R.id.btnHeaderInfo).setOnClickListener { showPage(4) }
+        onBackPressedDispatcher.addCallback(this, infoBackCallback)
+    }
+
+    /** Kleines graues i: klappt die Beschreibung zum Schalter auf und zu. */
+    private fun setupInfoToggle(buttonId: Int, vararg textIds: Int) {
+        findViewById<View>(buttonId).setOnClickListener {
+            val show = findViewById<View>(textIds[0]).visibility != View.VISIBLE
+            for (id in textIds) findViewById<View>(id).visibility = if (show) View.VISIBLE else View.GONE
+        }
+    }
+
+    /** i-Knöpfe auf den Seiten Tempolimit, Werkzeuge und Tracking. */
+    private fun setupInfoButtons() {
+        setupInfoToggle(R.id.btnInfoWarn, R.id.tvInfoWarn)
+        setupInfoToggle(R.id.btnInfoSound, R.id.tvInfoSound)
+        setupInfoToggle(R.id.btnInfoLimitOsm, R.id.tvInfoLimitOsm)
+        setupInfoToggle(R.id.btnInfoTags, R.id.tvInfoTags)
+        setupInfoToggle(R.id.btnInfoGuess, R.id.tvInfoGuess)
+        setupInfoToggle(R.id.btnInfoSigns, R.id.tvInfoSigns)
+        setupInfoToggle(R.id.btnInfoNeighbors, R.id.tvInfoNeighbors)
+        setupInfoToggle(R.id.btnInfoPreMobile, R.id.tvInfoPreMobile)
+        setupInfoToggle(R.id.btnInfoPreBg, R.id.tvInfoPreBg)
+        setupInfoToggle(R.id.btnInfoNotifAccess, R.id.tvInfoNotifAccess)
+        setupInfoToggle(R.id.btnInfoBattery, R.id.tvInfoBattery)
+        setupInfoToggle(R.id.btnInfoVerbose, R.id.tvInfoVerbose)
+        setupInfoToggle(R.id.btnInfoRecWhat, R.id.tvInfoRecWhat2)
+    }
+
     private fun setupHome() {
+        setupInfoToggle(R.id.btnInfoService, R.id.tvInfoService)
+        setupInfoToggle(R.id.btnInfoMaster, R.id.tvInfoMaster)
+        setupInfoToggle(R.id.btnInfoFreeRide, R.id.tvInfoFreeRide)
+        // Freies Fahren = OSMAnd getrennt (gespeichert wie bisher als KEY_OSMAND, umgekehrt)
+        val swFree = findViewById<MaterialSwitch>(R.id.swFreeRide)
+        swFree.isChecked = !prefs.getBoolean(BridgeService.KEY_OSMAND, true)
+        swFree.setOnCheckedChangeListener { _, checked ->
+            prefs.edit().putBoolean(BridgeService.KEY_OSMAND, !checked).apply()
+            applyConfigIfRunning()
+        }
         val swMaster = findViewById<MaterialSwitch>(R.id.swMaster)
         swMaster.isChecked = prefs.getBoolean(BridgeService.KEY_ENABLED, true)
+        // Freies Fahren macht nur bei eingeschalteter App Sinn: sonst ausgegraut
+        swFree.isEnabled = swMaster.isChecked
         swMaster.setOnCheckedChangeListener { _, checked ->
+            swFree.isEnabled = checked
             prefs.edit().putBoolean(BridgeService.KEY_ENABLED, checked).apply()
             if (checked) {
                 BridgeService.userStopped = false
@@ -140,11 +215,42 @@ class MainActivity : AppCompatActivity() {
             ModeCard(DisplayMode.NAVIGATOR, R.id.cardNavigator, R.id.cardNavigatorCheck),
             ModeCard(DisplayMode.MINIMALIST, R.id.cardMinimalist, R.id.cardMinimalistCheck),
             ModeCard(DisplayMode.EXPLORER, R.id.cardExplorer, R.id.cardExplorerCheck),
-            ModeCard(DisplayMode.CITY, R.id.cardCity, R.id.cardCityCheck)
+            ModeCard(DisplayMode.CITY, R.id.cardCity, R.id.cardCityCheck),
+            ModeCard(DisplayMode.GUIDE, R.id.cardGuide, R.id.cardGuideCheck),
+            ModeCard(DisplayMode.TRACKING, R.id.cardTracking, R.id.cardTrackingCheck)
         )
     }
 
+    /** Vorschauen von Guide und Cruiser zeigen die gewählten Zeilen (leere Zeilen bleiben leer). */
+    private fun updateSlotPreviews() {
+        fun fill(mode: DisplayMode, vals: List<Int>, labs: List<Int>) {
+            val list = FieldPickerDialog.current(prefs, mode)
+            for (i in vals.indices) {
+                val v = list.getOrNull(i) ?: HudValue.EMPTY
+                findViewById<TextView>(vals[i]).text = v.sample
+                findViewById<TextView>(labs[i]).text = v.label
+            }
+        }
+        fill(DisplayMode.GUIDE, listOf(R.id.pgVal1, R.id.pgVal2), listOf(R.id.pgLab1, R.id.pgLab2))
+        fill(DisplayMode.TRACKING, listOf(R.id.pcVal1, R.id.pcVal2, R.id.pcVal3, R.id.pcVal4), listOf(R.id.pcLab1, R.id.pcLab2, R.id.pcLab3, R.id.pcLab4))
+    }
+
     private fun setupDisplay() {
+        updateSlotPreviews()
+        setupInfoToggle(R.id.btnInfoKeep, R.id.tvInfoKeep)
+        setupInfoToggle(R.id.btnInfoMusic, R.id.tvInfoMusic)
+        setupInfoToggle(R.id.btnInfoNoticeMsg, R.id.tvInfoNoticeMsg)
+        setupInfoToggle(R.id.btnInfoNoticeCall, R.id.tvInfoNoticeCall)
+        setupInfoToggle(R.id.btnInfoBright, R.id.tvInfoBright)
+        setupInfoToggle(R.id.btnInfoJust, R.id.tvInfoJust)
+        for ((gear, mode) in listOf(R.id.btnGuideGear to DisplayMode.GUIDE, R.id.btnCruiserGear to DisplayMode.TRACKING)) {
+            findViewById<View>(gear).setOnClickListener {
+                FieldPickerDialog.show(this, prefs, mode) {
+                    updateSlotPreviews()
+                    applyConfigIfRunning()
+                }
+            }
+        }
         fun highlight(selected: DisplayMode) {
             for (mc in modeCards) {
                 val card = findViewById<MaterialCardView>(mc.card)
@@ -436,19 +542,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupSettings() {
-        val swOsmand = findViewById<MaterialSwitch>(R.id.chkOsmand)
-        swOsmand.isChecked = prefs.getBoolean(BridgeService.KEY_OSMAND, true)
-        swOsmand.setOnCheckedChangeListener { _, checked ->
-            prefs.edit().putBoolean(BridgeService.KEY_OSMAND, checked).apply()
-            applyConfigIfRunning()
-        }
-
         for ((id, key) in listOf(
             R.id.chkNoticeCall to BridgeService.KEY_NOTICE_CALL,
             R.id.chkNoticeMsg to BridgeService.KEY_NOTICE_MSG
         )) {
             val sw = findViewById<MaterialSwitch>(id)
-            sw.isChecked = prefs.getBoolean(key, true)
+            sw.isChecked = prefs.getBoolean(key, false)
             sw.setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(key, checked).apply() }
         }
         val swStraight = findViewById<MaterialSwitch>(R.id.chkKeepStraight)
@@ -529,14 +628,16 @@ class MainActivity : AppCompatActivity() {
 
         setupSeason()
 
-        val cacheValues = listOf(512, 1024, 2048, 5120, 10240)
+        val cacheValues = listOf(256, 512, 1024, 2048)
         val sldCache = findViewById<Slider>(R.id.sldCache)
         val tvCacheName = findViewById<TextView>(R.id.tvCacheName)
         fun cacheUi(i: Int) {
             val mb = cacheValues[i]
-            tvCacheName.text = if (mb < 1024) "0,5 GB" else "${mb / 1024} GB"
+            tvCacheName.text = if (mb < 1024) (if (mb == 256) "0,25 GB" else "0,5 GB") else "${mb / 1024} GB"
         }
-        val cacheIdx = cacheValues.indexOf(prefs.getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB)).takeIf { it >= 0 } ?: 2
+        val savedCache = prefs.getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB)
+        val cacheIdx = cacheValues.indexOfFirst { it >= savedCache }.takeIf { it >= 0 } ?: (cacheValues.size - 1)
+        if (cacheValues[cacheIdx] != savedCache) prefs.edit().putInt(BridgeService.KEY_CACHE_MB, cacheValues[cacheIdx]).apply()
         sldCache.value = cacheIdx.toFloat()
         cacheUi(cacheIdx)
         sldCache.addOnChangeListener { _, value, fromUser ->
@@ -676,12 +777,16 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<TextView>(R.id.tvPreloadStatus).text = preloadText
         val loading = updateLiveLoad(preloadText)
+        // Kurzmeldung oben (englisch) und eine kurze Zeile darunter
+        val failed = hud.contains("Fehler", true) || hud.contains("abgelehnt", true)
         tvHud.text = when {
-            !enabled -> "App ruht, HUD frei"
-            !inSeason -> "Außerhalb der Saison"
-            !hudOn -> if (running && loading) "Kein HUD verbunden, Straßendaten laden läuft" else "Kein HUD verbunden"
-            running -> hud.replaceFirstChar { it.uppercase() }
-            else -> "HUD nicht verbunden"
+            !enabled -> "Paused"
+            !inSeason -> "Off-season"
+            !hudOn -> "No HUD"
+            running && failed -> "Error"
+            running && hud.contains("bereit") -> "Connected"
+            running -> "Connecting …"
+            else -> "No HUD"
         }
         dotHud.setTextColor(
             ContextCompat.getColor(
@@ -694,23 +799,20 @@ class MainActivity : AppCompatActivity() {
                 }
             )
         )
-        tvServiceHint.text = if (!enabled) {
-            "Die App ruht komplett: kein Bluetooth, kein GPS, kein Laden. Das HUD ist frei für die Tilsberk-App. Nur das Laden im Hintergrund per WLAN läuft weiter, falls du es eingeschaltet hast."
-        } else if (!inSeason) {
-            val plan = BridgeService.seasonPlan(prefs)
-            val today = java.time.LocalDate.now()
-            val start = plan.nextStart(today)
-            val load = plan.loadStart(today)
-            "Die App ruht bis zum Saisonbeginn am " + (start?.let { dateText(it) } ?: "–") + "." +
-                if (season == io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.LEAD) " Straßendaten werden gerade im Hintergrund geladen."
-                else if (plan.leadWeeks > 0 && load != null) " Straßendaten laden ab " + dateText(load) + "." else ""
-        } else if (!hudOn) {
-            "HUD verbinden ist aus. Straßendaten laden läuft weiter, der Standort wird sparsam abgefragt."
-        } else if (running) {
-            "Läuft auch bei ausgeschaltetem Display."
-        } else {
-            "Schalte \"HUD verbinden\" ein, um das HUD zu verbinden."
+        tvServiceHint.text = when {
+            !enabled -> "HUD frei für die Tilsberk-App"
+            !inSeason -> {
+                val start = BridgeService.seasonPlan(prefs).nextStart(java.time.LocalDate.now())
+                "Start am " + (start?.let { dateText(it) } ?: "–") +
+                    if (season == io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.LEAD) " · Straßendaten laden" else ""
+            }
+            !hudOn -> if (running && loading) "Straßendaten laden" else ""
+            running && failed -> hud.replaceFirstChar { it.uppercase() }
+            running && hud.contains("bereit") -> "Läuft auch bei Display aus"
+            running -> ""
+            else -> "HUD verbinden einschalten"
         }
+        tvServiceHint.visibility = if (tvServiceHint.text.isNullOrBlank()) View.GONE else View.VISIBLE
         updateCacheUsed()
         updateTours()
         syncPermSwitches()
@@ -836,6 +938,227 @@ class MainActivity : AppCompatActivity() {
             .putString(BridgeService.KEY_NAME, d.name)
             .apply()
         BridgeService.send(this)
+    }
+
+    // ---------------- Tracking ----------------
+
+    private val trackHandler = Handler(Looper.getMainLooper())
+    private val trackTick = object : Runnable {
+        override fun run() {
+            updateRecUi()
+            trackHandler.postDelayed(this, 1000)
+        }
+    }
+    private var saveDialogs = 0 // offene Speichern-Dialoge
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    /** Kennzahlen als Text; Zeilen für Höhe, Limit und Schräglage nur, wenn es Werte dazu gibt. */
+    private fun statsText(st: io.github.th3s1nc.osmandhudbridge.track.RideStats): String {
+        val sb = StringBuilder()
+        sb.append("Strecke: ").append(RideFormat.distance(st.distanceM))
+        sb.append("\nIn Bewegung: ").append(RideFormat.duration(st.movingMs))
+        sb.append("\nGesamtzeit: ").append(RideFormat.duration(st.totalMs))
+        sb.append("\nØ Tempo: ").append(st.avgKmh).append(" km/h")
+        sb.append("\nHöchstes Tempo: ").append(st.maxKmh).append(" km/h")
+        if (st.hasEle) sb.append("\nAufstieg: ").append(st.ascentM).append(" m, Abstieg: ").append(st.descentM).append(" m")
+        if (st.hasLimit) sb.append("\nTempolimit überschritten: ").append(st.overCount).append(" Mal")
+        if (st.hasLean) sb.append("\nMax. Schräglage: ").append(st.maxLeanDeg).append("° (Schätzung)")
+        return sb.toString()
+    }
+
+    private fun setupTracking() {
+        findViewById<View>(R.id.btnRec).setOnClickListener { onRecClicked() }
+        findViewById<View>(R.id.tvRecBanner).setOnClickListener {
+            findViewById<BottomNavigationView>(R.id.bottomNav).selectedItemId = R.id.nav_tracking
+        }
+        for ((id, key) in listOf(
+            R.id.swRecAlt to BridgeService.KEY_REC_ALT,
+            R.id.swRecLimit to BridgeService.KEY_REC_LIMIT,
+            R.id.swRecLean to BridgeService.KEY_REC_LEAN
+        )) {
+            val sw = findViewById<MaterialSwitch>(id)
+            sw.isChecked = prefs.getBoolean(key, false)
+            sw.setOnCheckedChangeListener { _, checked -> prefs.edit().putBoolean(key, checked).apply() }
+        }
+        refreshRides()
+        updateRecUi()
+    }
+
+    private fun updateRecUi() {
+        val s = TrackRecorder.session
+        val chip = findViewById<TextView>(R.id.tvRecStatus)
+        chip.text = when {
+            s == null -> "● BEREIT"
+            s.paused -> "● PAUSE"
+            else -> "● LÄUFT"
+        }
+        chip.setTextColor(if (s == null) 0xFFA8A8B0.toInt() else 0xFFFF7A00.toInt())
+        chip.setBackgroundResource(if (s == null) R.drawable.bg_chip_idle else R.drawable.bg_chip_live)
+        val recCard = findViewById<MaterialCardView>(R.id.cardRec)
+        recCard.strokeColor = ContextCompat.getColor(this, R.color.accent)
+        recCard.strokeWidth = if (s == null) 0 else (2 * resources.displayMetrics.density).toInt()
+        val live = findViewById<TextView>(R.id.tvRecLive)
+        if (s == null) {
+            live.text = RideFormat.duration(0L) + " · " + RideFormat.distance(0)
+        } else {
+            val st = s.stats()
+            val kmh = s.points.lastOrNull()?.speedKmh?.toInt() ?: 0
+            live.text = RideFormat.duration(st.movingMs) + " in Bewegung · " + RideFormat.distance(st.distanceM) + " · " + kmh + " km/h"
+        }
+        findViewById<MaterialButton>(R.id.btnRec).text = if (s == null) "Aufzeichnung starten" else "Beenden"
+        for (id in listOf(R.id.swRecAlt, R.id.swRecLimit, R.id.swRecLean)) findViewById<View>(id).isEnabled = s == null
+        findViewById<View>(R.id.tvRecBanner).visibility = if (s != null) View.VISIBLE else View.GONE
+        updateRecLive(s)
+    }
+
+    /** Kleine Live-Werte unter den Schaltern, solange aufgenommen wird und der Schalter an ist. */
+    private fun updateRecLive(s: TrackSession?) {
+        fun show(sw: Int, tv: Int, text: () -> String) {
+            val t = findViewById<TextView>(tv)
+            val on = s != null && findViewById<MaterialSwitch>(sw).isChecked
+            t.visibility = if (on) View.VISIBLE else View.GONE
+            if (on) t.text = text()
+        }
+        val st = s?.stats()
+        val last = s?.points?.lastOrNull()
+        show(R.id.swRecAlt, R.id.tvRecAltLive) {
+            (last?.ele?.let { "Jetzt " + Math.round(it) + " m" } ?: "Noch keine Höhe") +
+                " · Aufstieg " + (st?.ascentM ?: 0) + " m · Abstieg " + (st?.descentM ?: 0) + " m"
+        }
+        show(R.id.swRecLimit, R.id.tvRecLimitLive) {
+            (if ((last?.limitKmh ?: 0) > 0) "Limit " + last?.limitKmh + " km/h" else "Limit unbekannt") +
+                " · bisher " + (st?.overCount ?: 0) + " Mal überschritten"
+        }
+        show(R.id.swRecLean, R.id.tvRecLeanLive) {
+            val l = last?.leanDeg
+            (if (l == null) "Unter 15 km/h keine Schätzung"
+            else "Jetzt " + Math.abs(Math.round(l)) + "°" + (if (Math.round(l) > 0) " rechts" else if (Math.round(l) < 0) " links" else "")) +
+                " · max. " + (st?.maxLeanDeg ?: 0) + "°"
+        }
+    }
+
+    private fun onRecClicked() {
+        if (!TrackRecorder.active) {
+            if (offerUnfinishedRide()) return
+            if (!BridgeService.running) {
+                Toast.makeText(this, "Erst auf der Übersicht die App einschalten", Toast.LENGTH_LONG).show()
+                return
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "Ohne Standort-Erlaubnis geht keine Aufzeichnung", Toast.LENGTH_LONG).show()
+                return
+            }
+            TrackRecorder.start(this)
+            BridgeService.send(this, BridgeService.ACTION_CONFIG)
+            updateRecUi()
+        } else {
+            val points = TrackRecorder.finish()
+            updateRecUi()
+            showSaveDialog(points, "Fahrt beenden")
+        }
+    }
+
+    /** Gibt true zurück, wenn eine unterbrochene Fahrt gefunden wurde und der Dialog dazu erscheint. */
+    private fun offerUnfinishedRide(): Boolean {
+        if (TrackRecorder.active || saveDialogs > 0) return saveDialogs > 0
+        val points = RideStore.unfinished(this)
+        if (points.size < 2) {
+            if (points.isNotEmpty()) RideStore.discardUnfinished(this)
+            return false
+        }
+        showSaveDialog(points, "Unterbrochene Fahrt gefunden")
+        return true
+    }
+
+    private fun showSaveDialog(points: List<io.github.th3s1nc.osmandhudbridge.track.TrackPoint>, title: String) {
+        val st = TrackSession().also { it.restore(points) }.stats()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(24), dp(8), dp(24), 0)
+        }
+        box.addView(TextView(this).apply {
+            text = statsText(st)
+        })
+        val input = EditText(this).apply {
+            setSingleLine()
+            setText(RideStore.defaultName(st.startMs))
+            hint = "Name der Fahrt"
+        }
+        box.addView(input)
+        saveDialogs++
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(box)
+            .setCancelable(false)
+            .setPositiveButton("Speichern") { _, _ ->
+                val name = input.text.toString().trim().ifEmpty { RideStore.defaultName(st.startMs) }
+                val ride = RideStore.save(this, name, points)
+                if (ride == null) {
+                    Toast.makeText(this, "Zu kurz zum Speichern", Toast.LENGTH_LONG).show()
+                    showSaveDialog(points, title)
+                } else {
+                    Toast.makeText(
+                        this,
+                        if (ride.publicUri != null) "Gespeichert, Kopie in Download/GPX-Tracking" else "Gespeichert (nur in der App)",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    refreshRides()
+                }
+            }
+            .setNegativeButton("Verwerfen") { _, _ -> confirmDiscard(points, title) }
+            .setNeutralButton("Weiter aufzeichnen") { _, _ ->
+                if (BridgeService.running) {
+                    TrackRecorder.resume(this, points)
+                    BridgeService.send(this, BridgeService.ACTION_CONFIG)
+                    updateRecUi()
+                } else {
+                    Toast.makeText(this, "Erst auf der Übersicht die App einschalten", Toast.LENGTH_LONG).show()
+                    showSaveDialog(points, title)
+                }
+            }
+            .setOnDismissListener { saveDialogs-- }
+            .show()
+    }
+
+    private fun confirmDiscard(points: List<io.github.th3s1nc.osmandhudbridge.track.TrackPoint>, title: String) {
+        saveDialogs++
+        AlertDialog.Builder(this)
+            .setTitle("Fahrt wirklich verwerfen?")
+            .setMessage("Die Aufzeichnung ist danach unwiderruflich weg.")
+            .setCancelable(false)
+            .setPositiveButton("Ja, verwerfen") { _, _ -> RideStore.discardUnfinished(this) }
+            .setNegativeButton("Nein") { _, _ -> showSaveDialog(points, title) }
+            .setOnDismissListener { saveDialogs-- }
+            .show()
+    }
+
+    private fun refreshRides() {
+        val list = RideStore.list(this)
+        val box = findViewById<LinearLayout>(R.id.listRides)
+        box.removeAllViews()
+        findViewById<View>(R.id.tvRidesEmpty).visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+        val bg = android.util.TypedValue().also { theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true) }.resourceId
+        for (r in list) {
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(0, dp(10), 0, dp(10))
+                setBackgroundResource(bg)
+                isClickable = true
+                setOnClickListener { startActivity(Intent(this@MainActivity, RideDetailActivity::class.java).putExtra(RideDetailActivity.EXTRA_ID, r.id)) }
+            }
+            row.addView(TextView(this).apply {
+                text = r.name
+                textSize = 16f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            row.addView(TextView(this).apply {
+                text = RideStore.dateText(r.stats.startMs) + " · " + RideFormat.distance(r.stats.distanceM) + " · " + RideFormat.duration(r.stats.movingMs)
+                textSize = 13f
+                alpha = 0.7f
+            })
+            box.addView(row)
+        }
     }
 
     // ---------------- Werkzeuge ----------------

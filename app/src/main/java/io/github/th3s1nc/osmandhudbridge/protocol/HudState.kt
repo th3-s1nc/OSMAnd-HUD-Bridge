@@ -23,6 +23,13 @@ data class HudState(
     val arrivalMinute: Int? = null,
     val nextStreet: String? = null,
     val currentStreet: String? = null,
+    /** Tracking-Testmodus: gefahrene Strecke in Metern, gefahrene Zeit in Minuten (null = leer). */
+    val tripDistanceM: Int? = null,
+    val tripMinutes: Int? = null,
+    /** Höhe in Metern für die wählbaren Zeilen; null = leer. */
+    val elevationM: Int? = null,
+    /** Kein GPS-Empfang: das HUD zeigt sein Warnsymbol. */
+    val gpsLost: Boolean = false,
     /** Tempowarnung: fett ab Limit + Toleranz. Aus = HUD bekommt immer "ok". */
     /** Limit ist nur geschätzt (nicht aus den Kartendaten): dann nie warnen. */
     val limitEstimated: Boolean = false,

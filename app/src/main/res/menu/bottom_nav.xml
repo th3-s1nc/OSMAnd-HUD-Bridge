@@ -3,6 +3,6 @@
     <item android:id="@+id/nav_home" android:icon="@drawable/ic_home" android:title="Übersicht" />
     <item android:id="@+id/nav_display" android:icon="@drawable/ic_display" android:title="Anzeige" />
     <item android:id="@+id/nav_settings" android:icon="@drawable/ic_speed" android:title="Tempolimit" />
+    <item android:id="@+id/nav_tracking" android:icon="@drawable/ic_track" android:title="Tracking" />
     <item android:id="@+id/nav_tools" android:icon="@drawable/ic_build" android:title="Werkzeuge" />
-    <item android:id="@+id/nav_info" android:icon="@drawable/ic_info" android:title="Info" />
 </menu>

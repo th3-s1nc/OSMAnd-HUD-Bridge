@@ -42,7 +42,7 @@ class PreloadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params
         if (!networkAllowed(sp.getBoolean(BridgeService.KEY_PRELOAD_MOBILE, false))) return Result.retry()
 
         val cache = TileCache(TileStore.dir(ctx))
-        cache.maxBytes = sp.getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB).toLong() * 1024 * 1024
+        cache.maxBytes = sp.getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB).coerceAtMost(BridgeService.MAX_CACHE_MB).toLong() * 1024 * 1024
         val started = System.currentTimeMillis()
         val dl = Downloader { loaded++ }
 

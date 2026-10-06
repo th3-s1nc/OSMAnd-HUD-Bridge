@@ -5,6 +5,8 @@ import io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode
 import io.github.th3s1nc.osmandhudbridge.protocol.HudProtocol
 import io.github.th3s1nc.osmandhudbridge.protocol.HudMessage
 import io.github.th3s1nc.osmandhudbridge.protocol.HudState
+import io.github.th3s1nc.osmandhudbridge.protocol.HudValue
+import io.github.th3s1nc.osmandhudbridge.protocol.SlotConfig
 import io.github.th3s1nc.osmandhudbridge.protocol.Lane
 import io.github.th3s1nc.osmandhudbridge.protocol.LaneDirection
 import io.github.th3s1nc.osmandhudbridge.protocol.LaneRecommendation
@@ -312,5 +314,71 @@ class HudProtocolTest {
         assertEquals(hex(HudProtocol.speedLimitField(100, true, 0)), hex(HudProtocol.encodeState(est, DisplayMode.NAVIGATOR)[3]!!))
         val over = st.copy(speedKmh = 65f)
         assertEquals(hex(HudProtocol.speedLimitField(50, false, 0)), hex(HudProtocol.encodeState(over, DisplayMode.NAVIGATOR)[3]!!))
+    }
+
+    @Test fun trackingTestMode() {
+        // Strecke wie die Restdistanz, aber Feld 13; Zeit Feld 14 (Stunde, Minute); Höhe Feld 26 in 5-m-Schritten, Einheit Meter
+        assertEquals("6a0408011001", hex(HudProtocol.tripDistanceField(1234)))
+        assertEquals("720408021005", hex(HudProtocol.tripDurationField(125)))
+        // Limit: Feld 29 (Tempo-Aufbau: Wert, Einheit km/h), ohne Limit leer
+        assertEquals("ea01" + "04" + "08321001", hex(HudProtocol.limitSlotField(50)))
+        assertEquals("ea0100", hex(HudProtocol.limitSlotField(0)))
+        // Nur der Tracking-Modus sendet die neuen Felder
+        val s = HudState(speedKmh = 50f, speedLimitKmh = 50, tripDistanceM = 2500, tripMinutes = 75)
+        // Standardzeilen: Tempo (1), Limit (29), Fahrzeit (14), Strecke (13); dazu Uhrzeit (8) und GPS-Status (30)
+        assertEquals(listOf(1, 8, 13, 14, 29, 30), HudProtocol.encodeState(s, DisplayMode.TRACKING).keys.sorted())
+        for (m in listOf(DisplayMode.NAVIGATOR, DisplayMode.MINIMALIST, DisplayMode.EXPLORER, DisplayMode.CITY))
+            assertFalse(HudProtocol.encodeState(s, m).keys.any { it == 13 || it == 14 || it == 29 || it == 26 || it == 30 })
+        // Moduswechsel: erst Textfelder (Kommando 100, Unterkommando 12), dann ShowHide (Bildschirm 21), dann Aktivieren
+        val sw = HudProtocol.switchMode(DisplayMode.TRACKING)
+        assertEquals(3, sw.size)
+        assertTrue(hex(sw[0].body).startsWith("a206"))
+        val txt = String(sw[0].body, Charsets.ISO_8859_1)
+        for (w in listOf("GESCHWINDIGKEIT", "VERBLEIBEND", "LIMIT", "FAHRZEIT", "STRECKE")) assertTrue(w, txt.contains(w))
+        assertTrue(sw[0].body.size <= HudProtocol.maxMessageBytes())
+        assertEquals(hex(HudProtocol.showHide(21, emptyList(), DisplayMode.TRACKING.show)), hex(sw[1].body))
+        assertEquals(hex(HudProtocol.activateScreen(21).body), hex(sw[2].body))
+        // andere Modi: unverändert zwei Nachrichten
+        assertEquals(2, HudProtocol.switchMode(DisplayMode.CITY).size)
+        // Handshake im Tracking-Modus enthält die Textfelder vor ShowHide
+        assertEquals(HudProtocol.handshake(1, 2, DisplayMode.CITY).size + 1, HudProtocol.handshake(1, 2, DisplayMode.TRACKING).size)
+    }
+
+    @Test fun guideAndSlotChoice() {
+        // Guide: feste Felder Pfeil (5), Entfernung (4), Uhrzeit (8) plus Standardzeilen Reststrecke (11) und Restzeit (10), GPS-Status (30)
+        val s = HudState(speedKmh = 50f, routeDistanceM = 267000, routeMinutes = 225)
+        assertEquals(listOf(4, 5, 8, 10, 11, 30), HudProtocol.encodeState(s, DisplayMode.GUIDE).keys.sorted())
+        assertEquals(20, DisplayMode.GUIDE.screenId)
+        assertEquals("Guide", DisplayMode.GUIDE.title)
+        assertEquals("Cruiser", DisplayMode.TRACKING.title)
+        // gewählte Zeilen bestimmen die Felder: Tempo, Höhe, leer, Ankunft
+        val pick = listOf(HudValue.SPEED, HudValue.ELEVATION, HudValue.EMPTY, HudValue.ARRIVAL)
+        val m = HudProtocol.encodeState(HudState(elevationM = 412, arrivalHour = 17, arrivalMinute = 30), DisplayMode.TRACKING, pick)
+        assertEquals(listOf(1, 8, 12, 26, 30), m.keys.sorted())
+        assertEquals("d201" + "05" + "089c03" + "1002", hex(m.getValue(26)))
+        // Höhe: Feld 26, Meter; negativ -> 0; ohne Wert leer
+        assertEquals("d20100", hex(HudProtocol.elevationField(null)))
+        assertEquals("d201021002", hex(HudProtocol.elevationField(-5)))
+        // GPS-Status: Feld 30, ein Byte-Flag
+        assertEquals("f20102" + "0801", hex(HudProtocol.gpsStateField(true)))
+        assertEquals("f20100", hex(HudProtocol.gpsStateField(false)))
+        // Auswahl lesen und schreiben
+        assertEquals(SlotConfig.CRUISER_DEFAULT, SlotConfig.parse(DisplayMode.TRACKING, null))
+        assertEquals(listOf(HudValue.SPEED, HudValue.EMPTY, HudValue.ELEVATION, HudValue.TRIP_TIME),
+            SlotConfig.parse(DisplayMode.TRACKING, "speed,empty,ele,ttime"))
+        assertEquals(SlotConfig.GUIDE_DEFAULT, SlotConfig.parse(DisplayMode.GUIDE, "kaputt"))
+        assertEquals("speed,empty", SlotConfig.encode(listOf(HudValue.SPEED, HudValue.EMPTY)))
+        // Textfelder: leere Zeile = Element 0, Beschriftungen kommen mit; Nachricht passt in ein Paket
+        try {
+            assertTrue(SlotConfig.set(DisplayMode.TRACKING, pick))
+            val txt = String(HudProtocol.textSlots().body, Charsets.ISO_8859_1)
+            for (w in listOf("GESCHWINDIGKEIT", "HOEHE", "ANKUNFT", "VERBLEIBEND")) assertTrue(w, txt.contains(w))
+            assertTrue(HudProtocol.textSlots().body.size <= HudProtocol.maxMessageBytes())
+        } finally {
+            SlotConfig.set(DisplayMode.TRACKING, SlotConfig.CRUISER_DEFAULT)
+        }
+        // Modus-Setup und Handshake enthalten die Textfelder auch für Guide
+        assertEquals(3, HudProtocol.switchMode(DisplayMode.GUIDE).size)
+        assertEquals(HudProtocol.handshake(1, 2, DisplayMode.CITY).size + 1, HudProtocol.handshake(1, 2, DisplayMode.GUIDE).size)
     }
 }

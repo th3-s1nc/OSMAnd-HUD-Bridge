@@ -20,6 +20,11 @@
         <package android:name="net.osmand" />
         <package android:name="net.osmand.plus" />
         <package android:name="net.osmand.dev" />
+        <!-- Karten-Apps, die GPX-Dateien anzeigen können (Knopf "In Karten-App ansehen") -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/gpx+xml" />
+        </intent>
     </queries>
 
     <application
@@ -47,6 +52,10 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <activity
+            android:name=".RideDetailActivity"
+            android:exported="false" />
 
         <service
             android:name=".BridgeService"

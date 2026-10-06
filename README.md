@@ -7,9 +7,10 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 > **Not affiliated** with Tilsberk, Digades or OSMAnd. All product names and trademarks belong to their owners and are used only to describe compatibility. **No warranty.** The display can fail or be wrong. Do not rely on it while riding; traffic signs and rules always take precedence. Use at your own risk.
 
 ## What it does
-- **Free riding without navigation:** even without a destination the HUD shows the current speed limit and (in City mode) the street name, where OpenStreetMap has them. The original setup only shows this during active navigation.
+- **Free riding without navigation:** even without a destination the HUD shows the current speed limit and (in City mode) the street name, where OpenStreetMap has them. The original setup only shows this during active navigation. The **Free riding** switch on the overview screen disconnects only OSMAnd (GPS, speed limit and street name keep working, as do calls, WhatsApp and Spotify). A short description sits under every heading, small grey i buttons explain details of single switches, and the info page opens with the i at the top right.
 - Shows speed, speed limit (from OpenStreetMap), turn arrow and distance, remaining distance / time / arrival, compass, incoming call / WhatsApp notices and, optionally, the current music track (artist, then title, 19 characters each, Explorer and City only) on the HUD.
-- Four display modes (Navigator, Minimalist, Explorer, City), selectable in the app, remembered between runs. Street names (current and next street) are shown by the HUD in City mode only; calls, messages and music in Explorer and City only.
+- Six displays: Navigator, Minimalist, Explorer, City, plus **Guide** (arrow with distance and two selectable lines) and **Cruiser** (four selectable lines, for free riding). A gear on the card of Guide and Cruiser picks the value per line (speed, speed limit, remaining distance, remaining time, arrival, ride time, distance, height, next street, or empty). Both are still tests. The choice is saved. Street names only show in City mode; calls, messages and music only in Explorer and City.
+- **Recording rides:** the Tracking tab is always available (also while navigating). Start/stop by button, auto-pause after 3 minutes standing (resumes by itself when you ride off), ended only by you. Saved as GPX and CSV in Download/GPX-Tracking (GPX with speed per point, optionally also barometer altitude, speed limit with overspeed count and estimated lean angle); rides appear in "Meine Fahrten". A ride opens its own page with a route map (OpenStreetMap tiles, fetched from the internet on first view), statistics and charts with a marker, plus view the GPX in a map app, share and delete. An interrupted recording is offered for saving the next time you open the app.
 - Optional: a permanent straight-ahead arrow between turns, so you can see on long straights that navigation is running.
 - On the Home tab a button next to the status opens OSMAnd directly.
 - Optional: audible warning (double beep, once per overspeed event) played by the phone, e.g. to a helmet intercom.
@@ -18,7 +19,7 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 - **Season rider:** if you only ride from month to month, set your season. Outside the season the app rests; a few weeks before the season starts it loads the road data around you.
 - The Home tab shows live what is being downloaded (surroundings and every open tour as "x of y"). The log shows the newest entry first, and a switch makes it more detailed.
 - Navigation data comes from OSMAnd's AIDL API (arrow, distance, destination reached, intermediate point) and from OSMAnd's navigation notification (remaining distance/time, arrival, street, roundabout exit). If the API is not available (e.g. app not enabled in OSMAnd), arrow and distance fall back to the notification.
-- Speed comes from the phone GPS, speed limits from OpenStreetMap via Overpass (online, also without navigation; map tiles are cached on the phone for 180 days and can be preloaded over Wi-Fi in a radius of up to 50 km, optionally in the background without the service, or along a GPX tour (Calimoto, Kurviger, Motobit); missing limits can optionally be estimated from town signs and neighbouring road sections).
+- Speed comes from the phone GPS, speed limits from OpenStreetMap via Overpass (online, also without navigation; map tiles are cached on the phone for 180 days (storage limit adjustable from 0.25 to 2 GB; a 50 km radius is usually only about 20 MB) and can be preloaded over Wi-Fi in a radius of up to 50 km, optionally in the background without the service, or along a GPX tour (Calimoto, Kurviger, Motobit); missing limits can optionally be estimated from town signs and neighbouring road sections).
 
 ## Requirements
 - Android 8.0+ (API 26), Bluetooth LE, a paired HUD
@@ -38,12 +39,12 @@ Open the folder in Android Studio (JDK 17, Gradle 8.13 / AGP 8.9.2), or:
 ./gradlew assembleDebug
 ```
 
-The protocol and parser logic, speed-limit matching, GPX import, GPS interval and season logic have unit tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpxImportTest`, `GpsPolicyTest`, `SeasonPlanTest`); the BLE, service and UI code is only covered by manual testing.
+The protocol and parser logic, speed-limit matching, GPX import, GPS interval, season logic, overspeed alarm, ride recording and ride analysis have unit tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpxImportTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`; they run without the Android SDK as plain Kotlin tests); the BLE, service and UI code is only covered by manual testing.
 
 ## Setup
 1. Switch the HUD on and pair it in Android's Bluetooth settings.
 2. Open the app, switch on *HUD verbinden* (connect HUD) and grant the permissions.
-3. In the Tools tab, tap the switches *Benachrichtigungszugriff* (notification access) and *Akku-Optimierung ausgeschaltet* (battery optimization off) and allow them in Android settings (the switches then show "on").
+3. In the Tools tab, tap the switches *Benachrichtigungszugriff* (notification access) and *Akku-Optimierung aus* (battery optimization off) and allow them in Android settings (the switches then show "on").
 4. Start navigation in OSMAnd.
 
 ## Troubleshooting (installing the APK)

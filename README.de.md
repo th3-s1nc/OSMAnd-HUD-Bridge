@@ -7,9 +7,10 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 > **Keine Verbindung** zu Tilsberk, Digades oder OSMAnd. Alle Produktnamen und Marken gehören ihren Inhabern und dienen nur der Beschreibung der Kompatibilität. **Keine Gewähr.** Die Anzeige kann ausfallen oder falsch sein. Verlass dich beim Fahren nicht darauf, Verkehrsschilder und -regeln haben Vorrang. Nutzung auf eigene Gefahr.
 
 ## Was die App tut
-- **Freies Fahren ohne Navigation:** Auch ohne Ziel zeigt das HUD das aktuelle Tempolimit und (im Modus City) den Straßennamen, soweit in OpenStreetMap vorhanden. Das Original-HUD zeigt das nur bei aktiver Navigation.
+- **Freies Fahren ohne Navigation:** Auch ohne Ziel zeigt das HUD das aktuelle Tempolimit und (im Modus City) den Straßennamen, soweit in OpenStreetMap vorhanden. Das Original-HUD zeigt das nur bei aktiver Navigation. Auf der Übersicht trennt der Schalter **Freies Fahren** nur die Verbindung zu OSMAnd (GPS, Tempolimit und Straßenname laufen weiter, ebenso Anrufe, WhatsApp und Spotify). Unter jeder Überschrift steht eine kurze Beschreibung, kleine graue i-Knöpfe erklären Einzelheiten bei den Schaltern. Die Info-Seite öffnet das i oben rechts.
 - Zeigt am HUD Tempo, Tempolimit (aus OpenStreetMap), Abbiegepfeil und Entfernung, Restweg, Restzeit und Ankunft, Kompass sowie eingehende Anrufe, WhatsApp-Nachrichten und auf Wunsch den laufenden Musiktitel (Interpret, dann Titel, je 19 Zeichen, nur Explorer und City).
-- Vier Anzeigemodi (Navigator, Minimalist, Explorer, City), in der App wählbar und gespeichert. Straßennamen (aktuelle und nächste Straße) zeigt das HUD nur im Modus City, Anrufe, Nachrichten und Musik nur in Explorer und City.
+- Sechs Anzeigen: Navigator, Minimalist, Explorer, City sowie **Guide** (Pfeil mit Entfernung und zwei frei wählbare Zeilen) und **Cruiser** (vier frei wählbare Zeilen, für freies Fahren). Bei Guide und Cruiser wählt ein Zahnrad an der Karte die Werte je Zeile (Geschwindigkeit, Tempolimit, Reststrecke, Restzeit, Ankunft, Fahrzeit, Strecke, Höhe, nächste Straße oder leer). Beide sind noch Tests. Die Auswahl wird gespeichert. Straßennamen zeigt das HUD nur im Modus City, Anrufe, Nachrichten und Musik nur in Explorer und City.
+- **Fahrten aufzeichnen:** Der Tab Tracking ist immer anwählbar, auch beim Navigieren. Aufzeichnung per Knopf, Autopause nach 3 Minuten Stand (geht beim Losfahren von selbst weiter), Ende nur durch dich. Gespeichert wird als GPX und CSV in Download/GPX-Tracking (GPX mit Tempo je Punkt, auf Wunsch auch Höhe per Barometer, Tempolimit mit Überschreitungen und geschätzter Schräglage); die Fahrten stehen in der Liste "Meine Fahrten". Eine Fahrt öffnet eine eigene Seite mit Karte der Route (OpenStreetMap-Kacheln, beim ersten Öffnen aus dem Internet), Kennzahlen und Diagrammen mit Markierung, außerdem GPX in einer Karten-App ansehen, teilen und löschen. Eine unterbrochene Aufnahme wird beim nächsten Öffnen zum Speichern angeboten.
 - Optional: dauerhafter Geradeaus-Pfeil zwischen den Abbiegungen, damit man auf langen Geraden sieht, dass die Navigation läuft.
 - Auf der Übersicht öffnet ein Knopf neben dem Status OSMAnd direkt.
 - Optional: akustische Warnung (Doppelpiepen, einmal pro Überschreitung) über das Handy, z. B. zur Intercom.
@@ -18,7 +19,7 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 - **Saisonfahrer:** Wer nur von Monat bis Monat fährt, stellt die Saison ein. Außerhalb der Saison ruht die App, einige Wochen vor Saisonbeginn lädt sie die Straßendaten im Umkreis.
 - Der Reiter Übersicht zeigt live, was gerade geladen wird (Umkreis und jede offene Tour mit „x von y“). Das Protokoll steht mit der neuesten Meldung oben, ein Schalter macht es ausführlicher.
 - Navigationsdaten: OSMAnd-Schnittstelle (Pfeil, Entfernung, Ziel erreicht, Zwischenziel) und OsmAnds Navigationsbenachrichtigung (Restweg/-zeit, Ankunft, Straße, Kreisverkehr-Ausfahrt). Ist die Schnittstelle nicht verfügbar (z. B. App in OSMAnd nicht freigegeben), kommen Pfeil und Entfernung ersatzweise aus der Benachrichtigung.
-- Tempo vom Handy-GPS, Tempolimit aus OpenStreetMap über Overpass (online, auch ohne Navigation; Kartenkacheln werden 180 Tage auf dem Handy gespeichert und lassen sich im WLAN bis 50 km im Umkreis vorladen, auf Wunsch auch im Hintergrund ohne Dienst oder entlang einer GPX-Tour (Calimoto, Kurviger, Motobit); fehlende Limits lassen sich optional aus Ortsschildern und Nachbarabschnitten schätzen).
+- Tempo vom Handy-GPS, Tempolimit aus OpenStreetMap über Overpass (online, auch ohne Navigation; Kartenkacheln werden 180 Tage auf dem Handy gespeichert (Datenspeicher einstellbar von 0,25 bis 2 GB, bei 50 km Umkreis meist nur etwa 20 MB) und lassen sich im WLAN bis 50 km im Umkreis laden, auf Wunsch auch im Hintergrund ohne Dienst oder entlang einer GPX-Tour (Calimoto, Kurviger, Motobit); fehlende Limits lassen sich optional aus Ortsschildern und Nachbarabschnitten schätzen).
 
 ## Voraussetzungen
 - Android 8.0+, Bluetooth LE, gekoppeltes HUD
@@ -38,12 +39,12 @@ Ordner in Android Studio öffnen (JDK 17, Gradle 8.13 / AGP 8.9.2) oder:
 ./gradlew assembleDebug
 ```
 
-Protokoll, Parser und die Logik für Tempolimit, GPX-Import, GPS-Takt und Saison haben Unit-Tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpxImportTest`, `GpsPolicyTest`, `SeasonPlanTest`). BLE, Dienst und Oberfläche sind nur manuell getestet.
+Protokoll, Parser und die Logik für Tempolimit, GPX-Import, GPS-Takt, Saison, Überschreitungs-Warnung, Fahrtaufzeichnung und Fahrtauswertung haben Unit-Tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpxImportTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`). Sie laufen ohne Android-SDK als reine Kotlin-Tests. BLE, Dienst und Oberfläche sind nur manuell getestet.
 
 ## Einrichten
 1. HUD einschalten und in den Android-Bluetooth-Einstellungen koppeln.
 2. App öffnen, den Schalter "HUD verbinden" einschalten, Berechtigungen erlauben.
-3. Im Reiter Werkzeuge die Schalter "Benachrichtigungszugriff" und "Akku-Optimierung ausgeschaltet" antippen und in den Android-Einstellungen erlauben (die Schalter zeigen danach "an").
+3. Im Reiter Werkzeuge die Schalter "Benachrichtigungszugriff" und "Akku-Optimierung aus" antippen und in den Android-Einstellungen erlauben (die Schalter zeigen danach "an").
 4. Navigation in OSMAnd starten.
 
 ## Fehlerbehebung (APK installieren)

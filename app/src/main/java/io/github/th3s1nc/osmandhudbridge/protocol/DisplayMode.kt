@@ -35,7 +35,34 @@ enum class DisplayMode(
         10, "City", listOf(21),
         listOf(8, 9, 10, 53, 16, 3, 51, 5, 4, 6, 7, 17, 32, 48, 52, 12),
         setOf(1, 3, 4, 5, 8, 10, 11, 15, 17), listOf(4, 5)
+    ),
+
+    /**
+     * Guide (Bildschirm 20): Pfeil mit Entfernung und zwei frei wählbare Textzeilen. [fields] sind nur die festen Felder,
+     * dazu kommen die Felder der gewählten Werte (siehe [SlotConfig]). HUD-Akku 107, Uhrzeit 104, Bluetooth 106, Pfeil 96/97,
+     * Entfernung 98, Textzeilen 208/224 und 209/225.
+     */
+    GUIDE(
+        20, "Guide", emptyList(),
+        listOf(107, 104, 106, 96, 97, 98, 208, 224, 209, 225),
+        setOf(4, 5, 8), emptyList()
+    ),
+
+    /**
+     * Cruiser (Bildschirm 21, früher "Tracking"/"Freies Fahren"): vier frei wählbare Textzeilen.
+     * Der Name TRACKING bleibt wegen der gespeicherten Einstellung.
+     */
+    TRACKING(
+        21, "Cruiser", emptyList(),
+        listOf(107, 104, 106, 210, 226, 211, 227, 212, 228, 213, 229),
+        setOf(8), emptyList()
     );
+
+    /** Dieser Modus braucht vor dem Aktivieren die Textfeld-Konfiguration. */
+    val usesTextSlots: Boolean get() = this == TRACKING || this == GUIDE
+
+    /** Erste Zeile dieses Modus in der Textfeld-Konfiguration mit sechs Zeilen (Guide 0-1, Cruiser 2-5). */
+    val slotStart: Int get() = if (this == GUIDE) 0 else 2
 
     /** Anruf-/Nachrichten-Anzeige: laut Test am HUD nur in Explorer und City sichtbar. */
     val supportsEvents: Boolean get() = this == EXPLORER || this == CITY

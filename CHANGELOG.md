@@ -2,6 +2,101 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.59
+- **Vorschauen:** Die Zahl im Tacho (Navigator, Explorer, City) saß zu weit links und verschwand teilweise im weißen Bogen. Sie ist jetzt mittig unter dem Bogen.
+
+## v0.11.58
+- **Vorschauen der Anzeigemodi neu:** Schwarz-Weiß mit feinem Innenrahmen, dickere Pfeile, Tempo als Tacho-Bogen wie beim Original (Navigator, Explorer, City), Straßenname fett, Telefonhörer beim Anruf.
+- **Beschreibungen dauerhaft sichtbar:** Bei Navigationsanweisung, Meldungen, Straßendaten laden, Tour laden, Datenspeicher, Aufzeichnung, Zusatzaufzeichnung, Saison und den beiden HUD-Karten steht der Text direkt unter dem Strich, das i dahinter ist weg. Weitere Details gibt es per i bei der jeweiligen Zeile (Anrufe, WhatsApp, Hinweise zu den Werten).
+- **Umbenannt:** "Straßendaten laden", "Tour laden", "Datenspeicher".
+- **Datenspeicher:** Regler jetzt 0,25 / 0,5 / 1 / 2 GB (Standard 1 GB). Größere gespeicherte Werte werden auf 2 GB gesetzt. Die Größenangaben im Hilfetext sind realistischer.
+
+## v0.11.57
+- **Vorschauen der Anzeigemodi angepasst:** Die Fahrzeit sitzt rechts, die Spurpfeile stehen mittig unter dem Abbiege-Pfeil, und beim Navigator ist die Linie über dem Tempo weg.
+
+## v0.11.56
+- **Tempolimit, Datenquelle:** "Zusätzliche Hinweise der Karte nutzen" heißt jetzt "Zusatzhinweise nutzen", damit der Schalter sichtbar bleibt.
+
+## v0.11.55
+- **Werkzeuge, Einrichtung:** Der Hinweistext steht jetzt immer da, das i ist weg.
+- **Tempolimit:** Die Karte heißt jetzt "Fehlende Limits".
+- **i-Knöpfe sitzen wieder mittig** neben den Überschriften "Straßendaten vorladen" und "Navigationsanweisung".
+
+## v0.11.54
+- **Vorladen:** Die Zeilen heißen jetzt "Mobile Daten nutzen" und "Hintergrundladen", damit der Schalter nicht mehr abgeschnitten wird.
+
+## v0.11.53
+- **Vorschauen der Anzeigemodi näher am Original:** Oben sind jetzt Uhrzeit, Bluetooth und HUD-Akku an den Original-Positionen zu sehen, der Inhalt ist wie auf dem HUD angeordnet (Navigator mit Spurpfeilen, Explorer mit Kompass, City mit Straßenname, Guide und Cruiser mit Statuszeile).
+- **Alles weiß:** Symbole, Uhrzeiten, Linien und das Tempolimit-Schild (weiße 50 mit weißem Ring) sind weiß, passend zum HUD.
+- **Anruf:** Ein Telefonhörer-Symbol vor dem Namen statt "Anruf:".
+- Nur die Vorschau-Bilder in der App ändern sich, am HUD selbst nichts.
+
+## v0.11.52
+- **Übersichtlicher gegliedert:** Kleine orange Abschnittsüberschriften mit dünner Linie trennen die Karten: Anzeige (ANZEIGEMODI, NAVIGATION, HUD), Tempolimit (AKTUELL, WARNUNG, DATENQUELLE, STRASSENDATEN) und Werkzeuge (EINRICHTUNG, HUD, DIAGNOSE).
+- **Neue Kartenüberschriften auf allen Seiten:** Orangebalken, größere Schrift und eine dünne Linie darunter.
+- **Tracking:** Der Kopf heißt jetzt "Aufzeichnung" mit einem Status-Etikett (BEREIT, LÄUFT, PAUSE). Während der Aufnahme hat die Karte einen orangen Rand. Im Ruhezustand zeigt sie "0:00 h · 0,0 km".
+- **Status oben auf der Übersicht** kürzer und englisch: Paused, Off-season, No HUD, Connecting …, Connected, Error, mit einer kurzen deutschen Zeile darunter. Die lange Erklärung zu "Paused" steht hinter dem i bei "App aktiv".
+- Kleine Textänderungen: "Akku-Optimierung aus", "Geradeaus-Pfeil an", "Zusatzaufzeichnung" statt "Was aufgezeichnet wird", bei Guide und Cruiser kein Hinweis mehr auf das Zahnrad.
+
+## v0.11.51
+- **i-Knöpfe** auch auf den Seiten Tempolimit, Werkzeuge und Tracking: die Erklärungstexte unter Schaltern und Überschriften sind zugeklappt und öffnen sich per Tipp. Kurze Hinweise unter Schiebereglern bleiben stehen.
+- Die Texte der Karten Guide und Cruiser sind stark gekürzt. Der Hinweis, dass Fahrzeit und Strecke bei null starten, steht jetzt im Fenster "Felder wählen". Cruiser ist nicht mehr auf "ohne Navigation" festgelegt.
+- Der Knopf "3 Testfahrten anlegen" im Tracking-Tab ist wieder entfernt. Schon angelegte Testfahrten bleiben und lassen sich löschen.
+
+## v0.11.50
+- Auf der Seite Anzeige stehen die Erklärungstexte unter den Karten jetzt hinter kleinen grauen **i-Knöpfen** (wie auf der Übersicht): Navigationsanweisung, Geradeaus-Pfeil dauerhaft, Meldungen, Spotify, Automatische Helligkeit und Justage-Modus. Ein Tipp klappt den Text auf und wieder zu. Die Karten der Anzeigen mit ihren Vorschauen bleiben unverändert.
+
+## v0.11.49
+- Die Zeilenwahl bei Guide und Cruiser hat kein **Durchschnittstempo** mehr (und damit auch den Hinweis, dass es nicht zusammen mit dem Tempolimit geht). Eine früher gewählte Zeile "Durchschnitt" wird zurück auf den Standardwert gesetzt.
+
+## v0.11.48
+- **Zwei neue Namen und eine neue Anzeige:** Die Anzeige "Freies Fahren" heißt jetzt **Cruiser**. Neu ist **Guide**: Abbiegepfeil mit Entfernung und darunter zwei Zeilen (Standard: Reststrecke und Restzeit). Beide sind noch Tests am HUD.
+- **Zeilen frei wählen:** An den Karten von Guide (2 Zeilen) und Cruiser (4 Zeilen) öffnet ein **Zahnrad** das Fenster "Felder wählen". Je Zeile gibt es eine Liste: Leer, Geschwindigkeit, Tempolimit, Durchschnittstempo, Reststrecke, Restzeit, Ankunft, Fahrzeit, Strecke, Höhe, nächste Straße. Die Vorschau auf der Karte zeigt die Wahl. Tempolimit und Durchschnitt teilen sich ein Feld am HUD, es geht nur eines von beiden. Werte ohne Daten (zum Beispiel Restzeit ohne Navigation) bleiben leer.
+- **GPS-Warnsymbol:** Kommt länger als 15 Sekunden keine Position, meldet die App dem HUD "GPS nicht verfügbar" (nur Guide und Cruiser, am Gerät noch nicht erprobt).
+- Die Uhrzeit wird bei Guide und Cruiser jetzt regelmäßig mitgeschickt.
+
+## v0.11.47
+- Der Tab **Tracking** ist jetzt immer anwählbar, auch beim Navigieren. Läuft eine Aufnahme, zeigt die Übersicht eine Zeile "Aufzeichnung läuft – zum Tracking" (Antippen öffnet den Tab).
+- **Freies Fahren** lässt sich nur einschalten, solange "App aktiv" an ist.
+- Die Anzeige "Tracking" heißt jetzt **Freies Fahren**.
+
+## v0.11.46
+- **Neue Fahrt-Seite:** Antippen einer Fahrt in "Meine Fahrten" öffnet eine eigene Seite nach dem Vorbild der Calimoto-Tourübersicht, ohne Veröffentlichen, Fotos, Bewertung und Eigenschaften: Name (mit Stift zum Umbenennen), Datum, Strecke und Zeit, **kleine Karte mit der Route** (Start grün, Ziel rot), Knöpfe **In Karten-App ansehen** (öffnet die GPX in einer Karten-App wie OSMAnd) und **Teilen** (GPX oder CSV), neun **Kacheln** (Durchschnitt, Maximum, Auf- und Abstieg, stärkstes Beschleunigen und Bremsen, max. Schräglage, Überschreitungen, Gesamtzeit) und **Diagramme** für Höhe, Schräglage (L oben, R unten), Beschleunigung und Geschwindigkeit (mit Tempolimit als orange Linie). Antippen oder Wischen über ein Diagramm setzt eine blaue Markierung mit Wert, die in allen Diagrammen und als orange Punkt auf der Karte mitläuft. Löschen steht oben rechts.
+- Die Karte zeigt **OpenStreetMap-Kacheln**. Sie werden beim ersten Öffnen aus dem Internet geladen und auf dem Handy gemerkt (höchstens 40 MB). Dabei erfährt der Kartenserver, welches Gebiet du ansiehst. Ohne Netz bleibt die Karte hell und leer, die Route wird trotzdem gezeichnet.
+- Die Rohpunkte jeder neuen Fahrt werden zusätzlich in einer eigenen kleinen Datei gespeichert (für die Fahrt-Seite). Fahrten aus früheren Versionen werden dafür nicht mehr unterstützt.
+- Neuer Knopf **3 Testfahrten anlegen** in "Meine Fahrten": erfundene Fahrten (Allgäu kurz, Eifel mit Pause, Schwäbische Alb lang) zum Ausprobieren der neuen Seite, ohne echte Ausfahrt. Sie lassen sich wie echte Fahrten löschen.
+
+## v0.11.45
+- Die drei Aufzeichnungs-Schalter (Höhe, Tempolimit, Schräglage) sind jetzt **standardmäßig aus**. Sind sie an und läuft eine Aufnahme, erscheinen die **aktuellen Werte live** klein unter dem jeweiligen Schalter: Höhe mit Auf- und Abstieg, Limit mit Anzahl der Überschreitungen, Schräglage jetzt und maximal.
+
+## v0.11.44
+- **Tracking-Tab, Teil 2:** Drei Schalter "Was aufgezeichnet wird" (Standard an, während einer Aufnahme nicht änderbar): **Höhe** (Barometer, das GPS gibt das Niveau vor; ohne Barometer GPS-Höhe), **Tempolimit und Überschreitungen** und **Schräglage** (Schätzung aus Drehsensor und GPS-Tempo ab ca. 15 km/h, rechts positiv, egal wie das Handy liegt).
+- Zusammenfassung zeigt zusätzlich Auf- und Abstieg (Höhenänderungen unter 3 m zählen nicht), wie oft das Tempolimit überschritten wurde (ab Limit + 3 km/h, eine Überschreitung zählt, bis man wieder auf Limit-Tempo ist; geschätzte Limits zählen nicht) und die maximale Schräglage.
+- Zu jeder Fahrt gibt es jetzt auch eine **CSV-Datei** (Semikolon, Dezimalkomma, Umlaute korrekt, öffnet in Excel per Doppelklick; eine Zeile je Punkt, keine Zusammenfassung) in Download/GPX-Tracking. Teilen fragt, ob GPX oder CSV.
+- In der GPX stehen Limit (`hb:limit`) und Schräglage (`hb:lean`) als eigene Felder, die andere Apps überspringen.
+
+## v0.11.43
+- **Tracking-Tab, Teil 1:** Aufzeichnung starten und beenden, mit Anzeige von Zeit in Bewegung, Strecke und Tempo. **Autopause**: nach 3 Minuten Stand pausiert die Aufnahme und geht ab 5 km/h von selbst weiter. Beenden nur durch dich, dann Zusammenfassung mit Name, **Speichern**, **Verwerfen** (mit Rückfrage) oder Weiter aufzeichnen.
+- Gespeichert wird als **GPX** (mit Tempo je Punkt, Garmin-Erweiterung) in **Download/GPX-Tracking** und zusätzlich in der App. Die Liste **Meine Fahrten** zeigt alle Fahrten, Antippen öffnet die Zusammenfassung mit Teilen und Löschen (löscht auch die Datei in Downloads).
+- Die Punkte werden während der Fahrt laufend gesichert. Wird die App oder der Dienst beendet, bietet die App die Fahrt beim nächsten Öffnen zum Speichern an.
+- Während der Aufnahme fragt das GPS jede Sekunde, der Dienst bleibt an, und die Benachrichtigung zeigt "Aufzeichnung läuft". Der Tab bleibt anwählbar, solange aufgenommen wird.
+- Noch nicht dabei (Teil 2): Höhe mit Barometer, Tempolimit und Überschreitungen, Schräglage, CSV.
+
+## v0.11.42
+- Anzeigemodus **Tracking** überarbeitet: zweites Feld ist jetzt das **Tempolimit** (statt Höhenmeter), Beschriftungen "FAHRZEIT" und "STRECKE". Eigene schematische Vorschau auf der Karte.
+
+## v0.11.41
+- Neuer Testmodus "Tracking (Test)" in der Anzeige: der Tracking-Bildschirm des HUD mit vier Feldern wie bei Calimoto (Tempo, Höhenmeter, gefahrene Zeit, gefahrene Strecke), Werte aus dem GPS des Handys.
+
+## v0.11.40
+- Text bei "Freies Fahren" klarer: Nur OSMAnd wird getrennt, GPS, Tempolimit und Straßenname laufen weiter.
+
+## v0.11.39
+- Übersicht: Der Schalter "Navigation aus OSMAnd" (Werkzeuge, Karte Datenquellen) ist jetzt der Schalter **Freies Fahren** auf der Übersicht, unter "App aktiv". An = OSMAnd komplett getrennt (die Einstellung bleibt dieselbe, nur umgekehrt benannt). Anrufe, WhatsApp und Spotify laufen weiter.
+- Kleine graue **i-Knöpfe** hinter den Schaltern auf der Übersicht klappen die Beschreibung auf und zu. Die Übersicht ist dadurch kürzer.
+- Der Info-Tab ist aus der unteren Leiste verschwunden (sie fasst höchstens fünf Tabs). Die Info-Seite öffnet das **i oben rechts**; Zurück-Taste oder Antippen eines Tabs führt zurück.
+- Neuer Tab **Tracking** (Platzhalter, die Aufzeichnung folgt): grau und nicht anwählbar, solange Freies Fahren aus ist.
+
 ## v0.11.38
 - Kreisverkehr und Abbiegungen bleiben am HUD stehen, auch wenn OSMAnd länger nichts meldet (im Hintergrund kamen Pausen bis über 30 s vor). Vorher wurde das HUD nach 10 s Stille geleert, und damit war auch die Ausfahrt-Nummer weg. Jetzt zählt die Entfernung mit dem GPS-Tempo weiter herunter (vorher nur 4 s lang) und wird erst nach 60 s ohne Meldung geleert.
 - Log: "OSMAnd war X s still", wenn nach mehr als 10 s wieder eine Meldung kommt.
