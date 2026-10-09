@@ -44,7 +44,6 @@ object HudProtocol {
     const val F_TRIP_DURATION = 14
     const val F_LIMIT_SLOT = 29
     const val F_ELEVATION = 26
-    const val F_GPS_STATE = 30
     const val F_ROUTE_DURATION = 10
     const val F_ROUTE_DISTANCE = 11
     const val F_ARRIVAL_TIME = 12
@@ -53,6 +52,8 @@ object HudProtocol {
     const val F_LANE_INFO = 18
     const val F_CALL_EVENT = 21
     const val F_SMS_EVENT = 22
+    const val F_BATT_EVENT = 20
+    const val F_CAMERA_DISTANCE = 25 // Feldnummer laut SDK, Entfernung Blitzer (zeigt der Gefahr-Bildschirm 22)
     const val F_COMMAND = 100
 
     // Einheiten
@@ -143,6 +144,9 @@ object HudProtocol {
 
     fun partDistanceField(meters: Int?): ByteArray = Protobuf.message(F_PART_DISTANCE, distanceParts(meters))
 
+    /** Entfernung zum Blitzer, gleiche Darstellung wie die Entfernung zur Abbiegung. null = leer. */
+    fun cameraDistanceField(meters: Int?): ByteArray = Protobuf.message(F_CAMERA_DISTANCE, distanceParts(meters))
+
     fun routeDistanceField(meters: Int?): ByteArray = Protobuf.message(F_ROUTE_DISTANCE, distanceParts(meters))
 
     /** Gefahrene Strecke (Tracking-Testmodus), gleiche Darstellung wie die Restdistanz. */
@@ -167,8 +171,12 @@ object HudProtocol {
         if (meters == null) Protobuf.message(F_ELEVATION)
         else Protobuf.message(F_ELEVATION, Protobuf.uint(1, meters.coerceAtLeast(0)), Protobuf.uint(2, UNIT_M))
 
-    /** GPS-Status (Feld 30): true = GPS nicht verfügbar, das HUD zeigt dann sein Warnsymbol. */
-    fun gpsStateField(notAvailable: Boolean): ByteArray = Protobuf.message(F_GPS_STATE, Protobuf.uint(1, if (notAvailable) 1 else 0))
+    /**
+     * Handy-Akku-Warnung (Feld 20, Zustand 1 = niedrig; leer = Warnung weg). Das HUD kennt auch "leer" (2), ob es dafür ein
+     * eigenes Symbol gibt, ist offen. Der innere Aufbau stammt aus dem SDK und ist noch nicht am Gerät bestätigt.
+     */
+    fun batteryWarnField(low: Boolean): ByteArray =
+        if (low) Protobuf.message(F_BATT_EVENT, Protobuf.uint(1, 1)) else Protobuf.message(F_BATT_EVENT)
 
     /** Pfeil. Die Ausfahrtsnummer wird nur bei Kreisverkehr-Pfeilen gesendet. */
     fun pointerField(command: NavCommand?, exit: Int?): ByteArray {
@@ -249,7 +257,8 @@ object HudProtocol {
         val ok = s.limitEstimated || speedOk(s.speedKmh, s.speedLimitKmh, s.warnEnabled, s.warnToleranceKmh)
         val m = LinkedHashMap<Int, ByteArray>()
         m[F_SPEED] = speedField(s.speedKmh)
-        m[F_SPEED_LIMIT] = speedLimitField(s.speedLimitKmh, ok, s.camera)
+        val shownLimit = if (s.camera != CameraType.NONE && s.cameraLimitKmh > 0) s.cameraLimitKmh else s.speedLimitKmh
+        m[F_SPEED_LIMIT] = speedLimitField(shownLimit, ok, s.camera)
         m[F_PART_DISTANCE] = partDistanceField(s.partDistanceM)
         m[F_POINTER] = pointerField(s.command, s.roundaboutExit)
         m[F_TIME] = timeField(s.hour, s.minute)
@@ -265,11 +274,12 @@ object HudProtocol {
         m[F_NEXT_STREET] = streetField(F_NEXT_STREET, s.nextStreet)
         m[F_CURRENT_STREET] = streetField(F_CURRENT_STREET, if (s.nextStreet.isNullOrBlank()) s.currentStreet else null)
         m[F_LIMIT_SLOT] = limitSlotField(s.speedLimitKmh)
+        m[F_BATT_EVENT] = batteryWarnField(s.phoneBatteryLow)
+        m[F_CAMERA_DISTANCE] = cameraDistanceField(s.cameraDistanceM)
         m[F_TRIP_DISTANCE] = tripDistanceField(s.tripDistanceM)
         m[F_TRIP_DURATION] = tripDurationField(s.tripMinutes)
         m[F_ELEVATION] = elevationField(s.elevationM)
-        m[F_GPS_STATE] = gpsStateField(s.gpsLost)
-        m.keys.retainAll(mode.fields + slots.map { it.field }.filter { it > 0 } + (if (mode.usesTextSlots) setOf(F_GPS_STATE) else emptySet()))
+        m.keys.retainAll(mode.fields + slots.map { it.field }.filter { it > 0 } + (if (mode.supportsBatteryWarning) setOf(F_BATT_EVENT) else emptySet()))
         return m
     }
 
@@ -337,6 +347,17 @@ object HudProtocol {
     fun switchMode(mode: DisplayMode): List<HudMessage> = modeSetup(mode)
 
     fun activateScreen(screen: Int) = command(Protobuf.message(5, Protobuf.uint(1, screen)))
+
+    /** Gefahren-Bildschirm (22): zeigt Tempolimit (99), Blitzer-Symbol (100) und Entfernung (101). */
+    const val SCREEN_DANGER = 22
+    private val DANGER_CODES = listOf(99, 100, 101)
+
+    /** Blitzer-Warnung: Gefahren-Bildschirm einrichten und aktivieren. */
+    fun dangerOn(): List<HudMessage> =
+        listOf(HudMessage(showHide(SCREEN_DANGER, emptyList(), DANGER_CODES)), activateScreen(SCREEN_DANGER))
+
+    /** Nach der Blitzer-Warnung: die drei Elemente wieder verstecken (danach schaltet der Aufrufer auf den Modus zurück). */
+    fun dangerOff(): HudMessage = HudMessage(showHide(SCREEN_DANGER, DANGER_CODES, emptyList()))
 
     /** Automatische Helligkeit einschalten (Wert 2 = ein), beim Verbinden. */
     fun brightnessAutomatic() = command(Protobuf.message(10, Protobuf.message(1, Protobuf.uint(2, 2))))

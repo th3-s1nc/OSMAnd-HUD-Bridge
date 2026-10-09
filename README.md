@@ -13,13 +13,17 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 - **Recording rides:** the Tracking tab is always available (also while navigating). Start/stop by button, auto-pause after 3 minutes standing (resumes by itself when you ride off), ended only by you. Saved as GPX and CSV in Download/GPX-Tracking (GPX with speed per point, optionally also barometer altitude, speed limit with overspeed count and estimated lean angle); rides appear in "Meine Fahrten". A ride opens its own page with a route map (OpenStreetMap tiles, fetched from the internet on first view), statistics and charts with a marker, plus view the GPX in a map app, share and delete. An interrupted recording is offered for saving the next time you open the app.
 - Optional: a permanent straight-ahead arrow between turns, so you can see on long straights that navigation is running.
 - On the Home tab a button next to the status opens OSMAnd directly.
-- Optional: audible warning (double beep, once per overspeed event) played by the phone, e.g. to a helmet intercom.
+- Optional: audible warning (triple beep, once per overspeed event) played by the phone, e.g. to a helmet intercom.
+- **Speed camera warning** (off; a note appears when switching on; not allowed for drivers in Germany and some other countries): uses OpenStreetMap and an own GPX list (e.g. SCDB, not included). Separate switch for the sound; the HUD briefly shows the camera symbol and distance.
+- **Hint tones** (each switchable, one single tone): level crossings, pedestrian crossings, traffic calming and very sharp bends.
+- **Import road data:** load a map file (.osm.pbf, e.g. from Geofabrik) once. Speed limits, zones, town signs and street names are then stored on the phone and work without internet. An **Offline data** switch is available. Without an import the app loads data while riding (current tile and the next one) from an Overpass server and keeps it for 30 days.
 - Runs as a foreground service, works with the screen off, reconnects automatically, shows nothing rather than something wrong.
-- Without a connected HUD the app can still download road data. It then polls the GPS only rarely (power-saving mode); with the HUD it polls every second.
-- **Season rider:** if you only ride from month to month, set your season. Outside the season the app rests; a few weeks before the season starts it loads the road data around you.
-- The Home tab shows live what is being downloaded (surroundings and every open tour as "x of y"). The log shows the newest entry first, and a switch makes it more detailed.
+- The service also runs without a connected HUD (GPS, speed limit, street name, sounds; storage limit adjustable). With the HUD the GPS is polled every second, otherwise less often.
+- **Season rider:** outside the season the app rests and uses no energy. The season overview in "Meine Fahrten" shows rides, distance and ride time.
+- The Home tab shows live speed limit and street name. The log shows the newest entry first, and a switch makes it more detailed.
+- Optional: phone battery warning on the HUD. The Tools tab has an element test for HUD display codes.
 - Navigation data comes from OSMAnd's AIDL API (arrow, distance, destination reached, intermediate point) and from OSMAnd's navigation notification (remaining distance/time, arrival, street, roundabout exit). If the API is not available (e.g. app not enabled in OSMAnd), arrow and distance fall back to the notification.
-- Speed comes from the phone GPS, speed limits from OpenStreetMap via Overpass (online, also without navigation; map tiles are cached on the phone for 180 days (storage limit adjustable from 0.25 to 2 GB; a 50 km radius is usually only about 20 MB) and can be preloaded over Wi-Fi in a radius of up to 50 km, optionally in the background without the service, or along a GPX tour (Calimoto, Kurviger, Motobit); missing limits can optionally be estimated from town signs and neighbouring road sections).
+- Speed comes from the phone GPS, speed limits from OpenStreetMap (imported or online via Overpass, also without navigation; missing limits can optionally be estimated from town signs and neighbouring sections).
 
 ## Requirements
 - Android 8.0+ (API 26), Bluetooth LE, a paired HUD
@@ -30,7 +34,7 @@ Tested by the author with one HUD on a Xiaomi 10T (LineageOS). Other devices, fi
 
 **Language:** The app's user interface is currently **German only**. The HUD itself shows no app text, only symbols, numbers and street names. An English translation is planned and contributions are welcome (see Contributing).
 
-**Using it next to the original app:** the HUD accepts only one Bluetooth connection at a time. Switch **HUD verbinden** (connect HUD, Home tab) off before you use the vendor app. The app then no longer uses Bluetooth to the HUD, but road data and preloading keep running (GPS only in power-saving mode). **App aktiv** (app active), on the other hand, switches almost everything off; only the optional background preload (Wi-Fi) keeps running if you switched it on.
+**Using it next to the original app:** the HUD accepts only one Bluetooth connection at a time. Switch **HUD verbinden** (connect HUD, Home tab) off before you use the vendor app. The app then no longer uses Bluetooth to the HUD, but speed limit, street names and sounds keep running. **App aktiv** (app active), on the other hand, switches everything off.
 
 ## Build
 Open the folder in Android Studio (JDK 17, Gradle 8.13 / AGP 8.9.2), or:
@@ -39,7 +43,7 @@ Open the folder in Android Studio (JDK 17, Gradle 8.13 / AGP 8.9.2), or:
 ./gradlew assembleDebug
 ```
 
-The protocol and parser logic, speed-limit matching, GPX import, GPS interval, season logic, overspeed alarm, ride recording and ride analysis have unit tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpxImportTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`; they run without the Android SDK as plain Kotlin tests); the BLE, service and UI code is only covered by manual testing.
+The protocol and parser logic, speed-limit matching, GPS interval, season logic, overspeed alarm, ride recording and ride analysis have unit tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `BatteryWarnTest`, `CameraWarnTest`, `CameraImportTest`, `PbfImportTest`, `PointWarnTest`, `CurveWarnTest`, `SeasonSummaryTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`; they run without the Android SDK as plain Kotlin tests); the BLE, service and UI code is only covered by manual testing.
 
 ## Setup
 1. Switch the HUD on and pair it in Android's Bluetooth settings.
@@ -54,7 +58,7 @@ The protocol and parser logic, speed-limit matching, GPX import, GPS interval, s
 
 ## Privacy
 - Notifications from OSMAnd, WhatsApp and phone calls, and the music track (artist, title), are read only to show them on the HUD. Nothing is stored or sent anywhere.
-- For street names and speed limits the approximate position is sent to an Overpass server (OpenStreetMap). This can be switched off (Speed limit tab → Data source).
+- Without imported data, the approximate position is sent to an Overpass server (OpenStreetMap) for street names and speed limits. With the *Offline data* switch (Speed limit tab) nothing is sent.
 - The log stays on the device. It may contain caller or sender names; check it before sharing.
 
 ## Protocol

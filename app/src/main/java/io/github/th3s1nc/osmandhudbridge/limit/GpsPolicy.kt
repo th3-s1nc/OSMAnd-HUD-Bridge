@@ -2,7 +2,7 @@ package io.github.th3s1nc.osmandhudbridge.limit
 
 /**
  * Wie oft das GPS gefragt wird. Mit verbundenem HUD jede Sekunde (Tempo und Pfeile flüssig), ohne HUD sparsam:
- * unterwegs alle 30 s (reicht fürs Vorladen entlang der Strecke), im Stand nur alle 5 min.
+ * unterwegs alle 30 s, im Stand nur alle 5 min.
  * Reine Logik ohne Android, damit sie getestet werden kann.
  */
 class GpsPolicy(

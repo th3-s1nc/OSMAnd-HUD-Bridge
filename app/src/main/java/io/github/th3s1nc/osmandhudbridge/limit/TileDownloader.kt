@@ -5,7 +5,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.util.Locale
 
-/** Anfrage an die Overpass-Server (OSM). Wird vom Dienst und vom Hintergrund-Vorladen gemeinsam benutzt. */
+/** Anfrage an die Overpass-Server (OSM). */
 object TileDownloader {
     val ENDPOINTS = listOf(
         "https://overpass-api.de/api/interpreter",
@@ -57,7 +57,8 @@ object TileDownloader {
         "[out:json][timeout:20];(way[\"highway\"~\"^(motorway|trunk|primary|secondary|tertiary|" +
             "unclassified|residential|living_street|service|road|motorway_link|trunk_link|primary_link|" +
             "secondary_link|tertiary_link)\$\"](%1\$.6f,%2\$.6f,%3\$.6f,%4\$.6f);" +
-            "node[\"traffic_sign\"=\"city_limit\"](%1\$.6f,%2\$.6f,%3\$.6f,%4\$.6f););out tags geom;",
+            "node[\"traffic_sign\"=\"city_limit\"](%1\$.6f,%2\$.6f,%3\$.6f,%4\$.6f);" +
+            "node[\"highway\"=\"speed_camera\"](%1\$.6f,%2\$.6f,%3\$.6f,%4\$.6f););out tags geom;",
         key.south - TileMath.MARGIN_DEG, key.west - TileMath.MARGIN_DEG,
         key.north + TileMath.MARGIN_DEG, key.east + TileMath.MARGIN_DEG
     )

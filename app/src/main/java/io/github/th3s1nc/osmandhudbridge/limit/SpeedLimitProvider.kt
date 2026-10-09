@@ -19,17 +19,21 @@ import java.util.concurrent.TimeUnit
  * Ablauf: Die Karte wird in Kacheln (ca. 2 x 2 km) geladen, auf dem Gerät zwischengespeichert (Festplatte, gepackt, 180 Tage,
  * nach 30 Tagen wird im Hintergrund erneuert) und die Kachel in Fahrtrichtung wird vorab geladen. Zugeordnet wird lokal bei
  * jedem GPS-Fix. Für Kacheln, die jetzt gebraucht werden, werden alle Server gleichzeitig gefragt (der schnellste gewinnt),
- * bei Fehlern wird schnell wiederholt (höchstens 15 s Pause). Optional lädt die App im WLAN die Umgebung im Voraus. Auf der gleichen Straße bleibt das Limit
+ * bei Fehlern wird schnell wiederholt (höchstens 15 s Pause). Auf der gleichen Straße bleibt das Limit
  * erhalten, auch wenn ein Abschnitt kein Tag hat oder eine Kreuzung unklar ist. Nur auf dem Main-Thread benutzen.
  */
 class SpeedLimitProvider(
     cacheDir: File?,
     private val onLimit: (Int, Boolean) -> Unit,
-    private val onStreet: (String?) -> Unit = {}
+    private val onStreet: (String?) -> Unit = {},
+    /** Blitzer vor dir: Entfernung in m (null = keiner) und ob jetzt der Ton kommen soll. */
+    private val onCamera: (Int?, Boolean, Int) -> Unit = { _, _, _ -> },
+    /** Ton vor Bahnübergang, Zebrastreifen oder Verkehrsberuhigung (Art aus [PointKind]). */
+    private val onPoint: (Int) -> Unit = {}
 ) {
     private val executor = Executors.newSingleThreadExecutor()
-    /** Eigener Thread für das Vorladen, damit eine gebrauchte Kachel nie hinter einer Vorlade-Anfrage wartet. */
-    private val preloadExecutor = Executors.newSingleThreadExecutor()
+    /** Eigener Thread für Aufräumarbeiten im Speicher, damit eine gebrauchte Kachel nie dahinter wartet. */
+    private val bgExecutor = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
     private val tracker = LimitTracker()
     private val signTracker = SignTracker()
@@ -37,19 +41,13 @@ class SpeedLimitProvider(
     private var indexKey: Pair<List<TileKey>, Int>? = null
     private var index: NeighborIndex? = null
     private val cache = cacheDir?.let { TileCache(it) }
-    private val tourStore = cacheDir?.parentFile?.let { TourStore(File(it, "tours")) }
-    private var tourBusy = false
-    private var nextTourAt = 0L
-    private var tourFailures = 0
-    private val tourFails = RepeatSummary()
-    private val preFails = RepeatSummary()
-    private var tourLoaded = 0 // in dieser Sitzung geladene Tour-Kacheln (nur Executor-Thread)
-    /** true, solange Kacheln einer importierten Tour fehlen (dann wartet das Vorladen des Kreises). */
-    @Volatile var tourPending = false
-        private set
 
-    /** Gibt es importierte Touren, bei denen noch Kacheln fehlen könnten? (Dateien lesen, nicht oft aufrufen) */
-    fun toursOpen(): Boolean = try { tourStore?.list()?.isNotEmpty() == true } catch (_: Exception) { false }
+    /** Nur gespeicherte und importierte Kacheln benutzen: nichts laden, nichts vorladen, nichts erneuern. */
+    @Volatile var offlineOnly = false
+        set(v) { if (v != field) { field = v; reloadTiles() } }
+
+    /** Kacheln im Speicher verwerfen und beim nächsten Standort neu lesen (nach einem Import oder beim Wechsel der Datenquelle). */
+    fun reloadTiles() { tiles.clear(); tilesVersion++ }
 
     /** Obergrenze für den Zwischenspeicher in MB. */
     var cacheMaxMb = 2048
@@ -57,7 +55,7 @@ class SpeedLimitProvider(
             field = v
             val c = cache ?: return
             c.maxBytes = v.toLong() * 1024 * 1024
-            preloadExecutor.execute { c.trimNow() }
+            bgExecutor.execute { c.trimNow() }
         }
 
     /** Geladene Kacheln im Speicher (die zuletzt benutzten bleiben). */
@@ -73,33 +71,9 @@ class SpeedLimitProvider(
     private var heldStreet: String? = null
     private var shutdown = false
 
-    // Vorladen
-    private var center: DoubleArray? = null
-    private var planCenter: DoubleArray? = null
-    private var planNeeded = true
-    private val preloadQueue = java.util.ArrayDeque<TileKey>()
-    private var preloadTotal = 0
-    private var preloadDone = 0
-    private var preloadBusy = false
-    private var preloadFailures = 0
-    private var nextPreloadAt = 0L
-    // Streifen in Fahrtrichtung
+    // Fahrtrichtung und Tempo (für Blitzer-Warnung und die Kachel in Fahrtrichtung)
     private var heading: Double? = null
     private var movingSpeed = 0f
-    private var aheadFrom: DoubleArray? = null
-
-    /** Radius des Vorladens in km, 0 = aus. */
-    var preloadKm = 0
-        set(v) {
-            if (field == v) return
-            field = v
-            planNeeded = true
-            if (v <= 0) { preloadQueue.clear(); preloadActive = false; BridgeBus.updatePreload("Aus") }
-        }
-
-    /** true, solange das Vorladen gerade arbeitet (dann beendet sich der Dienst nicht wegen fehlendem HUD). */
-    @Volatile var preloadActive = false
-        private set
 
     /** Straßen ohne Tempo-Tag: Limit schätzen (Deutschland 50/100), siehe [SpeedLimitMatcher.guessLimit]. */
     var guessMissing = false
@@ -113,6 +87,34 @@ class SpeedLimitProvider(
     var useSigns = true
         set(v) { field = v; if (!v) signTracker.reset() }
 
+    /** Blitzer-Warnung: -1 = aus, sonst 0 = Kurz, 1 = Normal, 2 = Lang. Braucht die Straßendaten (Tempolimit aus OSM-Daten an). */
+    var cameraLevel = -1
+        set(v) {
+            if (field == v) return
+            field = v
+            if (v < 0) { camWarn.reset(); if (camShown != null) { camShown = null; onCamera(null, false, 0) } }
+        }
+    private val camWarn = CameraWarn()
+    /** Eigene Blitzer-Liste (zum Beispiel SCDB) und welche Arten warnen sollen. */
+    @Volatile var importedCameras: List<ImportedCamera> = emptyList()
+    @Volatile var warnRedLight = true
+    @Volatile var warnSection = true
+    @Volatile var warnTunnel = true
+    private fun allowKind(kind: Int) = when (kind) { CameraKind.RED_LIGHT -> warnRedLight; CameraKind.SECTION -> warnSection; CameraKind.TUNNEL -> warnTunnel; else -> true }
+    private var camShown: Int? = null
+
+    /** Welche Punkt-Warnungen an sind (Bits aus [PointKind]); 0 = alle aus. Braucht importierte Straßendaten. */
+    @Volatile var pointMask = 0
+        set(v) { if (v != field) { field = v; pointWarn.reset() } }
+    private val pointWarn = PointWarn()
+
+    /** Warnung vor sehr scharfen Kurven: -1 = aus, sonst 0 = wenig, 1 = normal, 2 = viel (siehe [CurveLevel]). */
+    @Volatile var curveLevel = -1
+        set(v) { if (v != field) { field = v; curveWarn.reset() } }
+    private val curveWarn = CurveWarn()
+    private var curveIndexKey: Pair<List<TileKey>, Int>? = null
+    private var curveIndex: CurveIndex? = null
+
     var enabled = false
         set(v) {
             if (field == v) return
@@ -122,6 +124,7 @@ class SpeedLimitProvider(
                 lastReported = -1
                 heldStreet = null
                 onLimit(0, false)
+                if (camShown != null) { camShown = null; onCamera(null, false, 0) }
                 lastStreet = null
                 onStreet(null)
                 BridgeBus.limit = "Limit: aus"
@@ -133,12 +136,11 @@ class SpeedLimitProvider(
     fun shutdown() {
         shutdown = true
         executor.shutdownNow()
-        preloadExecutor.shutdownNow()
+        bgExecutor.shutdownNow()
     }
 
     fun onLocation(loc: Location) {
         if (!enabled) return
-        center = doubleArrayOf(loc.latitude, loc.longitude)
         heading = if (loc.hasBearing() && loc.hasSpeed() && loc.speed > AHEAD_MIN_SPEED) loc.bearing.toDouble() else null
         movingSpeed = if (loc.hasSpeed()) loc.speed else 0f
         val now = SystemClock.elapsedRealtime()
@@ -153,6 +155,18 @@ class SpeedLimitProvider(
         val keys = TileMath.covering(loc.latitude, loc.longitude)
         val datas = keys.mapNotNull { tiles[it] }
         val ways = datas.flatMap { it.ways }
+        if (cameraLevel >= 0) {
+            val osmCams = datas.flatMap { it.cameras }.distinctBy { it.id }
+            val cams = if (importedCameras.isEmpty()) osmCams else CameraImport.combine(osmCams, importedCameras, loc.latitude, loc.longitude, ::allowKind)
+            val hit = camWarn.update(cams, loc.latitude, loc.longitude, heading, speed, cameraLevel)
+            if (hit.sound) BridgeBus.log("Blitzer in ${hit.distanceM} m voraus")
+            val shown = hit.distanceM?.let { it / 10 * 10 }
+            if (shown != camShown || hit.sound) { camShown = shown; onCamera(shown, hit.sound, hit.limitKmh) }
+        }
+        if (pointMask != 0) {
+            val kind = pointWarn.update(datas.flatMap { it.points }.distinctBy { it.id }, loc.latitude, loc.longitude, heading, speed, pointMask)
+            if (kind != 0) { BridgeBus.log("Hinweis voraus: " + when (kind) { PointKind.LEVEL_CROSSING -> "Bahnübergang"; PointKind.ZEBRA -> "Zebrastreifen"; else -> "Verkehrsberuhigung" }); onPoint(kind) }
+        }
         val haveData = ways.isNotEmpty() || TileMath.tileOf(loc.latitude, loc.longitude) in tiles
         var zone: Zone? = null
         if (guessMissing && useSigns && datas.isNotEmpty()) {
@@ -209,11 +223,14 @@ class SpeedLimitProvider(
             BridgeBus.limit = if (haveData) "Limit: unbekannt"
                 else if (failures > 0) "Limit: Abfrage fehlgeschlagen, neuer Versuch" else "Limit: Karte wird geladen"
         }
-    }
-
-    /** Letzte bekannte Position (z. B. aus dem Gedächtnis), damit auch ohne GPS-Fix vorgeladen werden kann. */
-    fun setCenter(lat: Double, lon: Double) {
-        if (center == null) { center = doubleArrayOf(lat, lon); planNeeded = true }
+        if (curveLevel >= 0 && ways.isNotEmpty()) {
+            val k = keys to tilesVersion
+            if (curveIndexKey != k) { curveIndex = CurveIndex(ways); curveIndexKey = k }
+            if (curveWarn.update(ways, curveIndex!!, loc.latitude, loc.longitude, heading, speed, curveLevel, limit, zone == Zone.INNER)) {
+                BridgeBus.log("Scharfe Kurve voraus (Radius ${curveWarn.lastBend?.radiusM?.toInt()} m)")
+                onPoint(PointKind.CURVE)
+            }
+        }
     }
 
     private class Loaded(val data: TileData, val source: String, val refresh: Boolean)
@@ -231,7 +248,9 @@ class SpeedLimitProvider(
                     failures = 0
                     nextFetchAt = SystemClock.elapsedRealtime() + 300
                     BridgeBus.log("OSM: Kachel ${key.latIdx}/${key.lonIdx} ${r.source}, ${r.data.ways.size} Straßen, " +
-                        "${r.data.ways.count { w -> w.tags.keys.any { k -> k.startsWith("maxspeed") } }} mit Limit, ${r.data.signs.size} Ortsschilder")
+                        "${r.data.ways.count { w -> w.tags.keys.any { k -> k.startsWith("maxspeed") } }} mit Limit, ${r.data.signs.size} Ortsschilder, " +
+                        (if (r.data.hasCameras) "${r.data.cameras.size} Blitzer" else "keine Blitzerdaten (alte Kachel)"))
+                    updateCameraStat()
                 }.onFailure {
                     failures++
                     val wait = Backoff.delayMs(failures)
@@ -250,9 +269,19 @@ class SpeedLimitProvider(
     private fun loadTile(key: TileKey): Loaded {
         val now = System.currentTimeMillis()
         val cached = cache?.read(key, now)
-        if (cached != null && cached.ageMs < TileCache.VALID_MS) {
+        if (offlineOnly) {
+            // nur Speicher, egal wie alt; fehlt die Kachel, gilt sie als leer (kein Wiederholen, kein Netz)
+            if (cached != null) try { return Loaded(parse(cached.text), "aus Speicher (Offline-Daten)", false) } catch (_: Exception) { }
+            cache?.readLegacy(key, now)?.let { old ->
+                try { return Loaded(parse(old.text).let { TileData(it.ways, it.signs, emptyList(), false) }, "aus Speicher der Vorversion (Offline-Daten)", false) } catch (_: Exception) { }
+            }
+            return Loaded(TileData(emptyList(), emptyList(), emptyList(), false), "nicht gespeichert (Offline-Daten)", false)
+        }
+        // Importierte Kacheln (aus einer Kartendatei) gelten immer und werden nie online erneuert: ein neuer Import ist der Weg zu neuen Daten
+        val imported = cached != null && cached.text.startsWith(PbfImport.MARKER)
+        if (cached != null && (imported || cached.ageMs < TileCache.VALID_MS)) {
             try {
-                return Loaded(parse(cached.text), "aus Zwischenspeicher", cached.ageMs >= TileCache.REFRESH_MS)
+                return Loaded(parse(cached.text), if (imported) "aus Import" else "aus Zwischenspeicher", !imported && cached.ageMs >= TileCache.REFRESH_MS)
             } catch (_: Exception) { /* defekt: neu laden */ }
         }
         try {
@@ -264,11 +293,22 @@ class SpeedLimitProvider(
             if (cached != null) {
                 try { return Loaded(parse(cached.text), "aus altem Zwischenspeicher (kein Netz)", false) } catch (_: Exception) { }
             }
+            // Kachel der Vorversion (ohne Blitzer): Straßen und Limits stimmen weiter, Blitzer sind dann unbekannt
+            cache?.readLegacy(key, now)?.let { old ->
+                try { return Loaded(parse(old.text).let { TileData(it.ways, it.signs, emptyList(), false) }, "aus Zwischenspeicher der Vorversion (kein Netz)", false) } catch (_: Exception) { }
+            }
             throw e
         }
     }
 
     private fun query(key: TileKey): String = TileDownloader.query(key)
+
+    /** Blitzer in den gerade geladenen Kacheln (für die Anzeige im Tab Werkzeuge). */
+    private fun updateCameraStat() {
+        val withData = tiles.values.filter { it.hasCameras }
+        val n = withData.flatMap { it.cameras }.distinctBy { it.id }.size
+        BridgeBus.cameras = if (tiles.isEmpty()) "–" else "$n in ${withData.size} von ${tiles.size} geladenen Kacheln"
+    }
 
     /** Eine Anfrage an einen Server. [conns]: damit unterlegene Anfragen des Wettlaufs abgebrochen werden können. */
     private fun downloadOne(endpoint: String, q: String, conns: MutableList<HttpURLConnection>? = null): String =
@@ -314,166 +354,12 @@ class SpeedLimitProvider(
         }
     }
 
-    // ------------------------------------------------------------------ Vorladen
-
-    /** Sekündlich vom Dienst aufgerufen: lädt die Kacheln importierter Touren (GPX), eine nach der anderen, vor dem Kreis. */
-    fun tickTours(networkOk: Boolean) {
-        val store = tourStore ?: return
-        val c = cache ?: return
-        if (!enabled) { tourPending = false; return }
-        val now = SystemClock.elapsedRealtime()
-        if (tourBusy || fetching || now < nextTourAt || now < nextFetchAt) return
-        tourBusy = true
-        preloadExecutor.execute {
-            val next = try { store.nextMissing(c, System.currentTimeMillis()) } catch (_: Exception) { null }
-            if (next == null) {
-                if (tourPending) BridgeBus.log("Tour vorladen: alle Kacheln da")
-                main.post { tourPending = false; tourBusy = false; nextTourAt = SystemClock.elapsedRealtime() + 5_000L }
-                return@execute
-            }
-            if (!networkOk) {
-                main.post { tourPending = true; tourBusy = false; nextTourAt = SystemClock.elapsedRealtime() + 5_000L }
-                return@execute
-            }
-            val q = query(next)
-            var last: Exception? = null
-            var text: String? = null
-            try { text = TileDownloader.downloadSequential(q) } catch (e: Exception) { last = e }
-            if (text != null) {
-                c.write(next, text)
-                BridgeBus.changed()
-                tourLoaded++
-                if (tourLoaded % 10 == 1) {
-                    val st = try { store.status(c, System.currentTimeMillis()).firstOrNull() } catch (_: Exception) { null }
-                    if (st != null) BridgeBus.log("Tour \u201e${st.name}\u201c: ${st.total - st.missing} von ${st.total} Kacheln da")
-                }
-            }
-            main.post {
-                if (shutdown) return@post
-                tourPending = true
-                tourBusy = false
-                val t = SystemClock.elapsedRealtime()
-                if (text != null) {
-                    if (tourFailures > 0 && !BridgeBus.verbose) tourFails.take()?.let { BridgeBus.log("Tour vorladen: $it, danach ging es weiter") }
-                    tourFailures = 0
-                    nextTourAt = t + PRELOAD_GAP_MS
-                } else {
-                    tourFailures++
-                    nextTourAt = t + minOf(Backoff.delayMs(tourFailures) * 4, 60_000L)
-                    val why = last?.let { it.message ?: it.javaClass.simpleName } ?: "keine Antwort"
-                    if (BridgeBus.verbose || tourFailures == 1) {
-                        BridgeBus.log("Tour vorladen: Anfrage fehlgeschlagen ($why), neuer Versuch folgt")
-                    } else {
-                        tourFails.add(why.substringAfter(": ", why))
-                        if (tourFailures % 10 == 0) tourFails.take()?.let { BridgeBus.log("Tour vorladen: noch immer Fehler, $it") }
-                    }
-                }
-            }
-        }
-    }
-
-    /** Sekündlich vom Dienst aufgerufen. [unmetered]: WLAN bzw. Netz ohne Volumenbegrenzung. */
-    fun tickPreload(networkOk: Boolean, mobileAllowed: Boolean = false) {
-        val c = center
-        if (!enabled || preloadKm <= 0 || cache == null) { preloadActive = false; return }
-        if (tourPending) { preloadActive = networkOk; return } // erst die Tour, dann der Kreis
-        if (c == null) { preloadActive = false; BridgeBus.updatePreload("Wartet auf den Standort"); return }
-        val now = SystemClock.elapsedRealtime()
-        if (planNeeded || (planCenter != null && distM(planCenter!!, c) > REPLAN_M)) {
-            planNeeded = false
-            planCenter = c
-            planPreload(c[0], c[1], preloadKm)
-            return
-        }
-        if (preloadTotal == 0) { preloadActive = false; return } // Plan wird noch berechnet
-        queueAhead(c)
-        if (preloadQueue.isEmpty() && !preloadBusy) {
-            preloadActive = false
-            BridgeBus.updatePreload("Fertig: $preloadTotal Kacheln im Umkreis von $preloadKm km gespeichert")
-            return
-        }
-        if (!networkOk) { preloadActive = false; BridgeBus.updatePreload((if (mobileAllowed) "Wartet auf Netz (nicht im Roaming)" else "Wartet auf WLAN") + " ($preloadDone von $preloadTotal Kacheln)"); return }
-        preloadActive = true
-        BridgeBus.updatePreload("Vorgeladen: $preloadDone von $preloadTotal Kacheln")
-        if (fetching || preloadBusy || now < nextFetchAt || now < nextPreloadAt) return
-        val key = preloadQueue.pollFirst() ?: return
-        preloadBusy = true
-        preloadExecutor.execute {
-            val r = try {
-                // höflich: immer nur ein Server und Pause zwischen den Kacheln
-                // schlägt ein Server fehl, kommt gleich der nächste dran (nacheinander, nicht gleichzeitig)
-                val q = query(key)
-                Result.success(TileDownloader.downloadSequential(q))
-            } catch (e: Exception) { Result.failure(e) }
-            r.onSuccess { cache.write(key, it) }
-            main.post {
-                if (shutdown) return@post
-                preloadBusy = false
-                val t = SystemClock.elapsedRealtime()
-                if (r.isSuccess) {
-                    if (preloadFailures > 0 && !BridgeBus.verbose) preFails.take()?.let { BridgeBus.log("Vorladen: $it, danach ging es weiter") }
-                    preloadFailures = 0
-                    preloadDone++
-                    if (preloadDone % 50 == 0) BridgeBus.log("Vorladen: $preloadDone von $preloadTotal Kacheln")
-                    nextPreloadAt = t + PRELOAD_GAP_MS
-                } else {
-                    preloadFailures++
-                    preloadQueue.addLast(key)
-                    nextPreloadAt = t + minOf(Backoff.delayMs(preloadFailures) * 4, 60_000L)
-                    val why = r.exceptionOrNull()?.let { it.message ?: it.javaClass.simpleName } ?: "keine Antwort"
-                    if (BridgeBus.verbose || preloadFailures == 1) {
-                        BridgeBus.log("Vorladen: Anfrage fehlgeschlagen ($why), neuer Versuch folgt")
-                    } else {
-                        preFails.add(why.substringAfter(": ", why))
-                        if (preloadFailures % 10 == 0) preFails.take()?.let { BridgeBus.log("Vorladen: noch immer Fehler, $it") }
-                    }
-                }
-            }
-        }
-    }
-
-    /** Unterwegs: die Kacheln in Fahrtrichtung (bis 20 km) vorne in die Warteschlange, alle 1,5 km neu. */
-    private fun queueAhead(c: DoubleArray) {
-        val b = heading ?: return
-        val cache = cache ?: return
-        val from = aheadFrom
-        if (from != null && distM(from, c) < AHEAD_RECHECK_M) return
-        aheadFrom = c
-        val now = System.currentTimeMillis()
-        val fresh = PreloadPlanner.corridor(c[0], c[1], b, AHEAD_KM)
-            .filter { !cache.isFresh(it, now, TileCache.PRELOAD_SKIP_MS) && it !in preloadQueue }
-        if (fresh.isEmpty()) return
-        for (k in fresh.asReversed()) preloadQueue.addFirst(k)
-        preloadTotal += fresh.size
-    }
-
-    private fun planPreload(lat: Double, lon: Double, km: Int) {
-        val c = cache ?: return
-        preloadExecutor.execute {
-            val plan = PreloadPlanner.tilesInRadius(lat, lon, km)
-            val now = System.currentTimeMillis()
-            val missing = plan.filter { !c.isFresh(it, now, TileCache.PRELOAD_SKIP_MS) }
-            main.post {
-                if (shutdown || km != preloadKm) return@post
-                preloadQueue.clear()
-                preloadQueue.addAll(missing)
-                preloadTotal = plan.size
-                preloadDone = plan.size - missing.size
-                BridgeBus.log("Vorladen: ${plan.size} Kacheln im Umkreis von $km km, ${missing.size} fehlen")
-            }
-        }
-    }
-
-    private fun distM(a: DoubleArray, b: DoubleArray): Double {
-        val dx = (b[1] - a[1]) * 111_320.0 * Math.cos(Math.toRadians(a[0]))
-        val dy = (b[0] - a[0]) * 110_540.0
-        return Math.hypot(dx, dy)
-    }
-
     private fun parse(text: String): TileData {
         val ways = ArrayList<Way>()
         val signs = ArrayList<Sign>()
-        val els = JSONObject(text).optJSONArray("elements") ?: return TileData(ways, signs)
+        val cameras = ArrayList<Camera>()
+        val points = ArrayList<WarnPoint>()
+        val els = JSONObject(text).optJSONArray("elements") ?: return TileData(ways, signs, cameras)
         for (i in 0 until els.length()) {
             val e = els.getJSONObject(i)
             val tags = HashMap<String, String>()
@@ -488,22 +374,20 @@ class SpeedLimitProvider(
                     }
                     ways += Way(e.optLong("id"), pts, tags)
                 }
-                "node" -> if (tags["traffic_sign"] == "city_limit" && e.has("lat") && e.has("lon")) {
-                    signs += Sign(e.optLong("id"), e.getDouble("lat"), e.getDouble("lon"), tags)
+                "node" -> if (e.has("lat") && e.has("lon")) {
+                    if (tags["traffic_sign"] == "city_limit") signs += Sign(e.optLong("id"), e.getDouble("lat"), e.getDouble("lon"), tags)
+                    else if (tags["highway"] == "speed_camera") cameras += Camera(e.optLong("id"), e.getDouble("lat"), e.getDouble("lon"), tags)
+                    else PointKind.of(tags).let { k -> if (k != 0) points += WarnPoint(e.optLong("id"), e.getDouble("lat"), e.getDouble("lon"), k) }
                 }
             }
         }
-        return TileData(ways, signs)
+        return TileData(ways, signs, cameras, true, points)
     }
 
     private companion object {
         const val MAX_TILES = 6
         const val STREET_HOLD_MS = 8_000L
         const val RACE_BUDGET_MS = 25_000L
-        const val PRELOAD_GAP_MS = 2_500L
-        const val REPLAN_M = 3_000.0
-        const val AHEAD_KM = 20
-        const val AHEAD_RECHECK_M = 1_500.0
         const val AHEAD_MIN_SPEED = 3f // m/s, darunter gilt man als stehend
     }
 }

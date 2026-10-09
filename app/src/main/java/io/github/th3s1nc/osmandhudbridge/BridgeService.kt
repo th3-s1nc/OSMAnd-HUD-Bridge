@@ -15,10 +15,9 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.location.Location
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import android.location.LocationListener
 import android.location.LocationManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
@@ -105,6 +104,20 @@ class BridgeService : Service(), HudClient.Listener {
         }
         when (intent?.action) {
             ACTION_CLEAR -> controller.clearNavigation()
+            ACTION_ELEMENT_TEST -> {
+                val code = intent.getIntExtra(EXTRA_CODE, TEST_SHOW_MODE)
+                when {
+                    code == TEST_END -> controller.endElementTest()
+                    code == TEST_SHOW_MODE && intent.getStringExtra(EXTRA_MODE) == TEST_DANGER ->
+                        if (!controller.testShowScreen(TEST_DANGER_SCREEN)) BridgeBus.log("Element-Test: HUD nicht bereit")
+                    code == TEST_SHOW_MODE -> {
+                        val m = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(intent.getStringExtra(EXTRA_MODE))
+                        if (!controller.testShowMode(m)) BridgeBus.log("Element-Test: HUD nicht bereit")
+                    }
+                    else -> if (!controller.testBlink(code)) BridgeBus.log("Element-Test: HUD nicht bereit")
+                }
+            }
+            ACTION_RELOAD_TILES -> limitProvider.reloadTiles()
             ACTION_CONFIG, ACTION_START -> if (!firstStart) applyConfig()
         }
         return START_STICKY
@@ -116,7 +129,10 @@ class BridgeService : Service(), HudClient.Listener {
         val hasLocation = ContextCompat.checkSelfPermission(
             this, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
-        var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        // "connectedDevice" verlangt ab Android 12 die Bluetooth-Berechtigung; ohne HUD kann sie fehlen
+        val hasBt = Build.VERSION.SDK_INT < 31 ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+        var type = if (hasBt || !hasLocation) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
         if (hasLocation) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
         return try {
             ensureChannel()
@@ -129,20 +145,27 @@ class BridgeService : Service(), HudClient.Listener {
         }
     }
 
+    /** Ton bei Blitzern (eigener Schalter, unabhängig vom Ton bei Überschreitung). */
+    @Volatile private var cameraSound = false
+
+    private fun playBeep(hint: Boolean = false) {
+        val b = beeper ?: SpeedBeeper(applicationContext, handler).also { beeper = it }
+        b.beep(hint)
+    }
+
     private fun startAll() {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_JUSTAGE, false).apply() // Justage bleibt nie über einen Neustart hinweg an
         handler = Handler(Looper.getMainLooper())
         client = HudClient(applicationContext, this)
         controller = HudController(client)
-        controller.onOverspeed = {
-            val b = beeper ?: SpeedBeeper(applicationContext, handler).also { beeper = it }
-            b.beep()
-        }
+        controller.onOverspeed = { playBeep() }
         client.mode = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(prefs.getString(KEY_MODE, null))
         controller.setModeSilently(client.mode)
-        limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext), { kmh, est -> controller.setLimit(kmh, est) }, { controller.setCurrentStreet(it) })
-        restorePosition()
+        limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext), { kmh, est -> controller.setLimit(kmh, est) }, { controller.setCurrentStreet(it) }, { dist, sound, lim ->
+            controller.setCamera(dist, sound, lim)
+            if (sound && cameraSound) playBeep()
+        }, { _ -> playBeep(true) })
         started = true
         running = true
 
@@ -150,6 +173,10 @@ class BridgeService : Service(), HudClient.Listener {
             this, btReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED),
             ContextCompat.RECEIVER_EXPORTED
         )
+        readBattery(ContextCompat.registerReceiver(
+            this, battReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED
+        ))
+        evalBattery()
         val pm = getSystemService(PowerManager::class.java)
         wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "OSMAndHudBridge:service")?.apply {
             setReferenceCounted(false)
@@ -187,6 +214,7 @@ class BridgeService : Service(), HudClient.Listener {
         if (started) {
             handler.removeCallbacksAndMessages(null)
             try { unregisterReceiver(btReceiver) } catch (_: Exception) {}
+            try { unregisterReceiver(battReceiver) } catch (_: Exception) {}
             io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationBus.listener = null
             io.github.th3s1nc.osmandhudbridge.nav.NoticeBus.listener = null
             limitProvider.shutdown()
@@ -222,29 +250,20 @@ class BridgeService : Service(), HudClient.Listener {
                 } else sensors.stop()
                 getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, buildNotification())
             }
-            val preloadNet = preloadNetworkOk()
-            limitProvider.tickTours(preloadNet)
-            limitProvider.tickPreload(preloadNet, preloadMobile)
             if (speedFromOsmand && !osmSpeedFresh()) controller.setSpeed(lastGpsKmh)
             if (locMgr != null && lastFixAt != 0L && gpsMode == io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.FAST &&
                 SystemClock.elapsedRealtime() - lastFixAt > 5_000
             ) {
                 BridgeBus.gps = "GPS: kein aktueller Fix"
             }
-            // GPS-Warnsymbol am HUD: nur solange der Dienst GPS selbst nutzt und länger keine Position kommt
-            val nowMs = SystemClock.elapsedRealtime()
-            controller.setGpsLost(
-                gpsMode == io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.FAST &&
-                    nowMs - (if (lastFixAt != 0L) lastFixAt else startedAt) > GPS_LOST_MS
-            )
             handler.postDelayed(this, 1000)
         }
     }
 
     /** Beendet den Dienst, wenn das HUD lange nicht verbunden war. Gibt true zurück, wenn beendet wurde. */
     private fun checkIdle(): Boolean {
-        // Solange etwas zu laden ist (Vorladen an oder Tour offen), läuft der Dienst weiter, auch ohne HUD
-        if (client.isReady || TrackRecorder.active || limitProvider.preloadActive || limitProvider.preloadKm > 0 || limitProvider.tourPending) { idleSince = 0L; return false }
+        // Nur wenn ein HUD gewünscht ist und nicht gefunden wird, endet der Dienst nach einer Weile
+        if (client.isReady || TrackRecorder.active || !hudActive) { idleSince = 0L; return false }
         val now = SystemClock.elapsedRealtime()
         if (idleSince == 0L) { idleSince = now; return false }
         if (now - idleSince < IDLE_STOP_MS) return false
@@ -267,36 +286,33 @@ class BridgeService : Service(), HudClient.Listener {
         return true
     }
 
-    private var preloadMobile = false
+    // ---- Handy-Akku-Warnung ----
+    private val battWarn = io.github.th3s1nc.osmandhudbridge.limit.BatteryWarn()
+    private var battPercent = -1
+    private var battCharging = false
 
-    /**
-     * Darf jetzt im Voraus geladen werden? Immer im WLAN bzw. Netz ohne Volumenbegrenzung. Über mobile Daten nur, wenn der
-     * Nutzer es erlaubt hat, und dann nie im Roaming.
-     */
-    private fun preloadNetworkOk(): Boolean = try {
-        val cm = getSystemService(ConnectivityManager::class.java)
-        val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
-        caps != null && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && (
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED) ||
-                (preloadMobile && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_ROAMING))
-            )
-    } catch (_: Exception) { false }
-
-    private var lastPosSavedAt = 0L
-
-    /** Letzte Position merken (höchstens alle 10 Minuten), damit das Vorladen auch ohne GPS-Fix weiß, wo es laden soll. */
-    private fun rememberPosition(loc: Location) {
-        val now = SystemClock.elapsedRealtime()
-        if (lastPosSavedAt != 0L && now - lastPosSavedAt < 10 * 60_000L) return
-        lastPosSavedAt = now
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_LAST_POS, "${loc.latitude},${loc.longitude}").apply()
+    private val battReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            readBattery(intent)
+            evalBattery()
+        }
     }
 
-    private fun restorePosition() {
-        try {
-            val parts = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_LAST_POS, null)?.split(",")
-            if (parts != null && parts.size == 2) limitProvider.setCenter(parts[0].toDouble(), parts[1].toDouble())
-        } catch (_: Exception) { }
+    private fun readBattery(i: Intent?) {
+        if (i == null) return
+        val level = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+        battPercent = if (level >= 0 && scale > 0) level * 100 / scale else -1
+        battCharging = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+    }
+
+    private fun evalBattery() {
+        val sp = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val low = battWarn.update(
+            sp.getBoolean(KEY_BATT_WARN, false), battPercent, battCharging,
+            sp.getInt(KEY_BATT_PCT, io.github.th3s1nc.osmandhudbridge.limit.BatteryWarn.DEFAULT_PERCENT)
+        )
+        controller.setPhoneBatteryLow(low)
     }
 
     private val btReceiver = object : BroadcastReceiver() {
@@ -328,13 +344,12 @@ class BridgeService : Service(), HudClient.Listener {
 
     private val locListener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
-            if (location.hasAccuracy() && location.accuracy > 200f) return // grobe Ortung (Mobilfunk/WLAN) taugt nicht fürs Vorladen
+            if (location.hasAccuracy() && location.accuracy > 200f) return // grobe Ortung (Mobilfunk/WLAN) taugt nicht für das Tempolimit
             if (location.time == lastLocTime) return // dieselbe Ortung kam schon (GPS und Mitlauschen)
             lastLocTime = location.time
             lastFixAt = SystemClock.elapsedRealtime()
             gpsPolicy.onFix(lastFixAt, if (location.hasSpeed()) location.speed else null)
             limitProvider.onLocation(location)
-            rememberPosition(location)
             if (gpsMode != io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.FAST) {
                 BridgeBus.gps = "GPS: Sparmodus (ohne HUD)"
                 return
@@ -428,11 +443,7 @@ class BridgeService : Service(), HudClient.Listener {
             BridgeBus.hud = "HUD: aus"
         }
         getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, buildNotification())
-        if (!want && sp.getInt(KEY_PRELOAD_KM, DEFAULT_PRELOAD_KM) <= 0 && !limitProvider.toursOpen()) {
-            BridgeBus.log("HUD verbinden ist aus und es gibt nichts zu laden -> Dienst beendet")
-            stopping = true
-            stopSelf()
-        }
+        // Ohne HUD läuft der Dienst weiter (GPS, Tempolimit, Töne); nur "App aktiv" aus lässt die App ruhen
     }
 
     // ---------------- OSMAnd ----------------
@@ -490,10 +501,14 @@ class BridgeService : Service(), HudClient.Listener {
         limitProvider.useExtraTags = sp.getBoolean(KEY_LIM_TAGS, true)
         limitProvider.useNeighbors = sp.getBoolean(KEY_LIM_NEIGHBORS, true)
         limitProvider.useSigns = sp.getBoolean(KEY_LIM_SIGNS, true)
-        preloadMobile = sp.getBoolean(KEY_PRELOAD_MOBILE, false)
+        limitProvider.offlineOnly = sp.getBoolean(KEY_OFFLINE, false)
         limitProvider.cacheMaxMb = sp.getInt(KEY_CACHE_MB, DEFAULT_CACHE_MB).coerceAtMost(MAX_CACHE_MB)
-        limitProvider.preloadKm = sp.getInt(KEY_PRELOAD_KM, DEFAULT_PRELOAD_KM)
-        limitProvider.enabled = sp.getBoolean(KEY_OSM_LIMIT, true)
+        limitProvider.enabled = true // der frühere Hauptschalter ist entfallen
+        limitProvider.importedCameras = io.github.th3s1nc.osmandhudbridge.limit.CameraStore.load(filesDir)
+        limitProvider.warnRedLight = sp.getBoolean(KEY_CAM_RED, true)
+        limitProvider.warnSection = sp.getBoolean(KEY_CAM_SECTION, true)
+        limitProvider.warnTunnel = sp.getBoolean(KEY_CAM_TUNNEL, true)
+        limitProvider.cameraLevel = if (sp.getBoolean(KEY_CAMERA, false)) sp.getInt(KEY_CAMERA_LEAD, 1).coerceIn(0, 2) else -1
         val newMode = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(sp.getString(KEY_MODE, null))
         // Guide/Cruiser: Strecke und Zeit beginnen bei null, sobald der Modus gewählt wird
         if (newMode.usesTextSlots && controller.mode != newMode) trip.reset()
@@ -507,6 +522,13 @@ class BridgeService : Service(), HudClient.Listener {
         if (slotsChanged) controller.slotsChanged()
         controller.setWarn(sp.getBoolean(KEY_WARN, true), sp.getInt(KEY_WARN_TOL, DEFAULT_WARN_TOL))
         controller.acousticWarn = sp.getBoolean(KEY_WARN_SOUND, false)
+        cameraSound = sp.getBoolean(KEY_CAMERA_SOUND, sp.getBoolean(KEY_WARN_SOUND, false))
+        limitProvider.curveLevel = if (sp.getBoolean(KEY_CURVE, false)) sp.getInt(KEY_CURVE_LEVEL, 1).coerceIn(0, 2) else -1
+        limitProvider.pointMask =
+            (if (sp.getBoolean(KEY_HINT_RAIL, false)) io.github.th3s1nc.osmandhudbridge.limit.PointKind.LEVEL_CROSSING else 0) or
+            (if (sp.getBoolean(KEY_HINT_ZEBRA, false)) io.github.th3s1nc.osmandhudbridge.limit.PointKind.ZEBRA else 0) or
+            (if (sp.getBoolean(KEY_HINT_CALMING, false)) io.github.th3s1nc.osmandhudbridge.limit.PointKind.CALMING else 0)
+        evalBattery()
         controller.setBrightness(if (sp.getBoolean(KEY_BRIGHT_AUTO, true)) -1 else sp.getInt(KEY_BRIGHT_STEP, 1).coerceIn(0, 2))
         if (!controller.setJustage(sp.getBoolean(KEY_JUSTAGE, false))) {
             sp.edit().putBoolean(KEY_JUSTAGE, false).apply() // HUD nicht verbunden: Schalter zurücksetzen
@@ -605,7 +627,7 @@ class BridgeService : Service(), HudClient.Listener {
             .setContentTitle("OSMAnd HUD Bridge")
             .setContentText(
                 if (TrackRecorder.active) "Aufzeichnung läuft" + (if (hudActive) " · " + BridgeBus.hud else "")
-                else if (hudActive) BridgeBus.hud else "Ohne HUD: lädt Straßendaten, Standort im Sparmodus"
+                else if (hudActive) BridgeBus.hud else "Ohne HUD: wartet auf die Verbindung, Standort im Sparmodus"
             )
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -618,6 +640,14 @@ class BridgeService : Service(), HudClient.Listener {
         const val ACTION_START = "io.github.th3s1nc.osmandhudbridge.START"
         const val ACTION_STOP = "io.github.th3s1nc.osmandhudbridge.STOP"
         const val ACTION_CLEAR = "io.github.th3s1nc.osmandhudbridge.CLEAR"
+        const val ACTION_ELEMENT_TEST = "io.github.th3s1nc.osmandhudbridge.ELEMENT_TEST"
+        const val EXTRA_MODE = "mode"
+        const val EXTRA_CODE = "code"
+        const val TEST_SHOW_MODE = -1
+        const val TEST_END = -2
+        const val TEST_DANGER = "DANGER" // Gefahren-Bildschirm des HUD, kein Anzeigemodus
+        const val TEST_DANGER_SCREEN = 22
+        const val ACTION_RELOAD_TILES = "io.github.th3s1nc.osmandhudbridge.RELOAD_TILES" // nach einem Karten-Import: geladene Kacheln neu lesen
         const val ACTION_CONFIG = "io.github.th3s1nc.osmandhudbridge.CONFIG"
         const val PREFS = "bridge"
         const val KEY_ADDR = "hud_address"
@@ -626,34 +656,46 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_THRESHOLD = "threshold"
         const val KEY_SPEED_SRC = "speed_source" // "gps" oder "osmand"
         const val KEY_OSM_LIMIT = "osm_limit"
+        const val KEY_IMPORT_INFO = "import_info" // Ergebniszeile des letzten Imports der Straßendaten
+        const val KEY_IMPORT_SUB = "import_sub"
+        const val KEY_IMPORT_LOG = "import_log" // Zahlen je eingelesener Datei (für die Zusammenfassung)
+        const val KEY_OFFLINE = "offline_data" // nur gespeicherte und importierte Straßendaten, nie laden
         const val KEY_MODE = "display_mode"
         const val KEY_SLOTS_GUIDE = "slots_guide"
         const val KEY_SLOTS_CRUISER = "slots_cruiser"
-        const val GPS_LOST_MS = 15_000L
         const val KEY_NOTICE_CALL = "notice_call"
         const val KEY_NOTICE_MSG = "notice_msg"
         const val KEY_KEEP_STRAIGHT = "keep_straight" // Geradeaus-Pfeil dauerhaft
+        const val KEY_BATT_WARN = "batt_warn" // Handy-Akku-Warnung am HUD (Guide, Cruiser, Explorer)
+        const val KEY_BATT_PCT = "batt_warn_pct"
         const val KEY_NOTICE_MUSIC = "notice_music" // Spotify: neuer Titel am HUD
         const val KEY_ENABLED = "bridge_enabled"
         const val KEY_GUESS_LIMIT = "guess_limit"
-        const val KEY_PRELOAD_KM = "preload_km" // 0 = aus
-        const val KEY_PRELOAD_MOBILE = "preload_mobile" // auch über mobile Daten (nie im Roaming)
         const val KEY_LIM_TAGS = "limit_extra_tags"
         const val KEY_LIM_NEIGHBORS = "limit_neighbors"
         const val KEY_LIM_SIGNS = "limit_signs"
-        const val DEFAULT_PRELOAD_KM = 25
         const val KEY_CACHE_MB = "cache_max_mb" // Obergrenze des Kartenspeichers
         const val DEFAULT_CACHE_MB = 1024
         const val MAX_CACHE_MB = 2048
-        const val KEY_LAST_POS = "last_pos"
         const val KEY_VERBOSE = "log_verbose"
         const val KEY_SEASON_ON = "season_on" // nur in der Saison aktiv
         const val KEY_SEASON_FROM = "season_from" // Monat 1..12
         const val KEY_SEASON_TO = "season_to"
-        const val KEY_SEASON_LEAD = "season_lead_weeks" // Wochen vor Saisonbeginn, ab denen Straßendaten geladen werden
         const val KEY_HUD_ON = "hud_on" // Schalter "HUD verbinden" (nur die Bluetooth-Verbindung)
-        const val KEY_PRELOAD_BG = "preload_background" // Vorladen auch ohne laufenden Dienst (WorkManager)
         const val KEY_WARN_SOUND = "warn_sound" // Warnton bei Überschreitung
+        const val KEY_CURVE = "hint_curve" // Ton vor sehr scharfen Kurven
+        const val KEY_CURVE_LEVEL = "hint_curve_level" // 0 = wenig, 1 = normal, 2 = viel
+        const val KEY_HINT_RAIL = "hint_rail" // Ton vor Bahnübergängen (nur mit importierten Straßendaten)
+        const val KEY_HINT_ZEBRA = "hint_zebra" // Ton vor Zebrastreifen
+        const val KEY_HINT_CALMING = "hint_calming" // Ton vor Verkehrsberuhigung
+        const val KEY_CAMERA_SOUND = "camera_sound" // Ton bei Blitzern (ohne eigenen Wert: wie KEY_WARN_SOUND)
+        const val KEY_CAMERA = "camera_warn" // Blitzer-Warnung (aus OSM-Daten), standardmäßig aus
+        const val KEY_CAMERA_LEAD = "camera_lead" // 0 Kurz, 1 Normal, 2 Lang
+        const val KEY_CAM_RED = "cam_red" // eigene Liste: Ampelblitzer warnen
+        const val KEY_CAM_SECTION = "cam_section" // Abschnittskontrolle warnen
+        const val KEY_CAM_TUNNEL = "cam_tunnel" // Tunnel warnen
+        const val KEY_CAM_LIST_COUNT = "cam_list_count" // Zahl importierter Blitzer (nur für die Anzeige)
+        const val KEY_CAM_LIST_FILES = "cam_list_files" // Zahl der importierten Dateien (nur für die Anzeige)
         const val KEY_WARN = "warn_enabled"
         const val KEY_WARN_TOL = "warn_tolerance" // km/h, 0..30
         const val DEFAULT_WARN_TOL = 10
@@ -672,7 +714,7 @@ class BridgeService : Service(), HudClient.Listener {
         var running = false
 
         fun seasonPlan(sp: SharedPreferences) = io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan(
-            sp.getInt(KEY_SEASON_FROM, 3), sp.getInt(KEY_SEASON_TO, 10), sp.getInt(KEY_SEASON_LEAD, 3)
+            sp.getInt(KEY_SEASON_FROM, 3), sp.getInt(KEY_SEASON_TO, 10)
         )
 
         /** Saison-Zustand heute. Ist der Saison-Schalter aus, ist immer Saison. */

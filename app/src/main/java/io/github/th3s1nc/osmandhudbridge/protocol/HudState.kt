@@ -7,6 +7,10 @@ data class HudState(
     /** Tempolimit in km/h, 0 = unbekannt. */
     val speedLimitKmh: Int = 0,
     val camera: Int = CameraType.NONE,
+    /** Entfernung zum Blitzer vor dir in Metern (nur gesetzt, solange gewarnt wird). */
+    val cameraDistanceM: Int? = null,
+    /** Tempolimit am Blitzer (aus der eigenen Liste); 0 = unbekannt. Gilt nur, solange gewarnt wird. */
+    val cameraLimitKmh: Int = 0,
     /** Distanz zum nächsten Manöver in Metern. */
     val partDistanceM: Int? = null,
     val command: NavCommand? = null,
@@ -28,8 +32,8 @@ data class HudState(
     val tripMinutes: Int? = null,
     /** Höhe in Metern für die wählbaren Zeilen; null = leer. */
     val elevationM: Int? = null,
-    /** Kein GPS-Empfang: das HUD zeigt sein Warnsymbol. */
-    val gpsLost: Boolean = false,
+    /** Handy-Akku unter der gewählten Grenze: Warnsymbol (nur Guide, Cruiser, Explorer). */
+    val phoneBatteryLow: Boolean = false,
     /** Tempowarnung: fett ab Limit + Toleranz. Aus = HUD bekommt immer "ok". */
     /** Limit ist nur geschätzt (nicht aus den Kartendaten): dann nie warnen. */
     val limitEstimated: Boolean = false,

@@ -264,7 +264,7 @@ class HudProtocolTest {
         fun keys(m: DisplayMode) = HudProtocol.encodeState(s, m).keys.sorted()
         assertEquals(listOf(1, 3, 4, 5, 8, 10, 11, 18), keys(DisplayMode.NAVIGATOR))
         assertEquals(listOf(3, 4, 5, 8, 10, 11), keys(DisplayMode.MINIMALIST))
-        assertEquals(listOf(1, 2, 3, 4, 5, 8, 11, 12), keys(DisplayMode.EXPLORER))
+        assertEquals(listOf(1, 2, 3, 4, 5, 8, 11, 12, 20), keys(DisplayMode.EXPLORER))
         assertEquals(listOf(1, 3, 4, 5, 8, 10, 11, 15, 17), keys(DisplayMode.CITY))
     }
 
@@ -325,8 +325,8 @@ class HudProtocolTest {
         assertEquals("ea0100", hex(HudProtocol.limitSlotField(0)))
         // Nur der Tracking-Modus sendet die neuen Felder
         val s = HudState(speedKmh = 50f, speedLimitKmh = 50, tripDistanceM = 2500, tripMinutes = 75)
-        // Standardzeilen: Tempo (1), Limit (29), Fahrzeit (14), Strecke (13); dazu Uhrzeit (8) und GPS-Status (30)
-        assertEquals(listOf(1, 8, 13, 14, 29, 30), HudProtocol.encodeState(s, DisplayMode.TRACKING).keys.sorted())
+        // Standardzeilen: Tempo (1), Limit (29), Fahrzeit (14), Strecke (13); dazu Uhrzeit (8)
+        assertEquals(listOf(1, 8, 13, 14, 20, 29), HudProtocol.encodeState(s, DisplayMode.TRACKING).keys.sorted())
         for (m in listOf(DisplayMode.NAVIGATOR, DisplayMode.MINIMALIST, DisplayMode.EXPLORER, DisplayMode.CITY))
             assertFalse(HudProtocol.encodeState(s, m).keys.any { it == 13 || it == 14 || it == 29 || it == 26 || it == 30 })
         // Moduswechsel: erst Textfelder (Kommando 100, Unterkommando 12), dann ShowHide (Bildschirm 21), dann Aktivieren
@@ -345,23 +345,20 @@ class HudProtocolTest {
     }
 
     @Test fun guideAndSlotChoice() {
-        // Guide: feste Felder Pfeil (5), Entfernung (4), Uhrzeit (8) plus Standardzeilen Reststrecke (11) und Restzeit (10), GPS-Status (30)
+        // Guide: feste Felder Pfeil (5), Entfernung (4), Uhrzeit (8) plus Standardzeilen Reststrecke (11) und Restzeit (10)
         val s = HudState(speedKmh = 50f, routeDistanceM = 267000, routeMinutes = 225)
-        assertEquals(listOf(4, 5, 8, 10, 11, 30), HudProtocol.encodeState(s, DisplayMode.GUIDE).keys.sorted())
+        assertEquals(listOf(4, 5, 8, 10, 11, 20), HudProtocol.encodeState(s, DisplayMode.GUIDE).keys.sorted())
         assertEquals(20, DisplayMode.GUIDE.screenId)
         assertEquals("Guide", DisplayMode.GUIDE.title)
         assertEquals("Cruiser", DisplayMode.TRACKING.title)
         // gewählte Zeilen bestimmen die Felder: Tempo, Höhe, leer, Ankunft
         val pick = listOf(HudValue.SPEED, HudValue.ELEVATION, HudValue.EMPTY, HudValue.ARRIVAL)
         val m = HudProtocol.encodeState(HudState(elevationM = 412, arrivalHour = 17, arrivalMinute = 30), DisplayMode.TRACKING, pick)
-        assertEquals(listOf(1, 8, 12, 26, 30), m.keys.sorted())
+        assertEquals(listOf(1, 8, 12, 20, 26), m.keys.sorted())
         assertEquals("d201" + "05" + "089c03" + "1002", hex(m.getValue(26)))
         // Höhe: Feld 26, Meter; negativ -> 0; ohne Wert leer
         assertEquals("d20100", hex(HudProtocol.elevationField(null)))
         assertEquals("d201021002", hex(HudProtocol.elevationField(-5)))
-        // GPS-Status: Feld 30, ein Byte-Flag
-        assertEquals("f20102" + "0801", hex(HudProtocol.gpsStateField(true)))
-        assertEquals("f20100", hex(HudProtocol.gpsStateField(false)))
         // Auswahl lesen und schreiben
         assertEquals(SlotConfig.CRUISER_DEFAULT, SlotConfig.parse(DisplayMode.TRACKING, null))
         assertEquals(listOf(HudValue.SPEED, HudValue.EMPTY, HudValue.ELEVATION, HudValue.TRIP_TIME),
@@ -380,5 +377,38 @@ class HudProtocolTest {
         // Modus-Setup und Handshake enthalten die Textfelder auch für Guide
         assertEquals(3, HudProtocol.switchMode(DisplayMode.GUIDE).size)
         assertEquals(HudProtocol.handshake(1, 2, DisplayMode.CITY).size + 1, HudProtocol.handshake(1, 2, DisplayMode.GUIDE).size)
+    }
+
+    // ---------- Element-Test ----------
+
+    @Test fun elementTestBlinksChosenCode() {
+        val et = io.github.th3s1nc.osmandhudbridge.protocol.ElementTest
+        val msgs = et.start(20, 105)
+        assertEquals(2, msgs.size) // Testwert + Element einblenden
+        assertEquals(hex(HudProtocol.showHide(20, emptyList(), listOf(105))), hex(msgs[1].body))
+        assertEquals(hex(HudProtocol.showHide(20, listOf(105), emptyList())), hex(et.blink(20, 105, false).body))
+        // Ende: ein Code, den der Modus ohnehin zeigt, bleibt sichtbar; ein fremder wird versteckt
+        assertEquals(hex(HudProtocol.showHide(20, emptyList(), listOf(107))), hex(et.finish(DisplayMode.GUIDE, 107).body))
+        assertEquals(hex(HudProtocol.showHide(20, listOf(99), emptyList())), hex(et.finish(DisplayMode.GUIDE, 99).body))
+    }
+
+    @Test fun elementTestCatalogIsConsistent() {
+        val et = io.github.th3s1nc.osmandhudbridge.protocol.ElementTest
+        val cat = et.catalog
+        assertEquals(cat.size, cat.map { it.code }.toSet().size)
+        for (m in DisplayMode.values()) {
+            val list = et.listFor(m)
+            assertEquals(cat.size, list.size)
+            assertTrue(list.first().code in m.show)
+        }
+    }
+
+    @Test
+    fun dangerScreenSwitchesAndHidesAgain() {
+        val on = HudProtocol.dangerOn()
+        assertEquals(2, on.size) // zuerst Elemente 99, 100, 101 einblenden, dann Bildschirm 22 aktivieren
+        assertEquals(HudProtocol.showHide(22, emptyList(), listOf(99, 100, 101)).toList(), on[0].body.toList())
+        assertEquals(HudProtocol.activateScreen(22).body.toList(), on[1].body.toList())
+        assertEquals(HudProtocol.showHide(22, listOf(99, 100, 101), emptyList()).toList(), HudProtocol.dangerOff().body.toList())
     }
 }

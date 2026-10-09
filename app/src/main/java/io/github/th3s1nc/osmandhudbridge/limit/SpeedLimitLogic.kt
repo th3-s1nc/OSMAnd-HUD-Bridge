@@ -11,7 +11,9 @@ data class TileKey(val latIdx: Int, val lonIdx: Int) {
     val north get() = (latIdx + 1) * TileMath.TILE_LAT
     val west get() = lonIdx * TileMath.TILE_LON
     val east get() = (lonIdx + 1) * TileMath.TILE_LON
-    val fileName get() = "tile2_${latIdx}_$lonIdx.json" // "2": enthält auch Ortsschilder, ältere Dateien (tile_*) werden gelöscht
+    val fileName get() = "tile3_${latIdx}_$lonIdx.json" // "3": enthält auch Blitzer, "2" nur Ortsschilder, ältere (tile_*) werden gelöscht
+    /** Datei der Vorversion (ohne Blitzer): nur als Notlösung ohne Netz zu gebrauchen. */
+    val legacyFileName get() = "tile2_${latIdx}_$lonIdx.json"
 }
 
 /** Kachel-Rechnung ohne Android-Abhängigkeit (testbar). */
@@ -124,79 +126,18 @@ class RepeatSummary {
     }
 }
 
-/** Welche Kacheln für ein Vorladen im Umkreis nötig sind (nächste zuerst). */
-object PreloadPlanner {
-    const val MAX_TILES = 3000
-
-    /**
-     * Kacheln in einem Streifen vor der Position in Fahrtrichtung ([bearingDeg], 0 = Nord): drei Linien (Mitte, links und rechts
-     * je [sideM] daneben), alle [stepM] ein Punkt, bis [lengthKm]. Die nächsten zuerst, ohne Doppelte.
-     */
-    fun corridor(lat: Double, lon: Double, bearingDeg: Double, lengthKm: Int, stepM: Double = 1000.0, sideM: Double = 1500.0): List<TileKey> {
-        if (lengthKm <= 0) return emptyList()
-        val out = LinkedHashSet<TileKey>()
-        val b = Math.toRadians(bearingDeg)
-        var d = 0.0
-        while (d <= lengthKm * 1000.0) {
-            for (side in doubleArrayOf(0.0, -sideM, sideM)) {
-                val east = d * sin(b) + side * cos(b)
-                val north = d * cos(b) - side * sin(b)
-                val la = lat + north / 110_540.0
-                val lo = lon + east / (111_320.0 * cos(Math.toRadians(la)).coerceAtLeast(0.05))
-                out += TileMath.tileOf(la, lo)
-            }
-            d += stepM
-        }
-        return out.toList()
-    }
-
-    /**
-     * Kacheln entlang einer Strecke ([points] als Breite/Länge): alle [stepM] ein Punkt, dazu je ein Raster von [sideM] links,
-     * rechts, vor und hinter dem Punkt. In Reihenfolge der Strecke, ohne Doppelte, höchstens [MAX_TILES].
-     */
-    fun route(points: List<DoubleArray>, sideM: Double = 1500.0, stepM: Double = 500.0): List<TileKey> {
-        val out = LinkedHashSet<TileKey>()
-        fun add(la: Double, lo: Double) {
-            val c = cos(Math.toRadians(la)).coerceAtLeast(0.05)
-            for (dy in doubleArrayOf(0.0, -sideM, sideM)) for (dx in doubleArrayOf(0.0, -sideM, sideM)) {
-                if (out.size >= MAX_TILES) return
-                out += TileMath.tileOf(la + dy / 110_540.0, lo + dx / (111_320.0 * c))
-            }
-        }
-        for (i in 0 until points.size - 1) {
-            val a = points[i]; val b = points[i + 1]
-            val c = cos(Math.toRadians(a[0])).coerceAtLeast(0.05)
-            val len = Math.hypot((b[1] - a[1]) * 111_320.0 * c, (b[0] - a[0]) * 110_540.0)
-            val n = maxOf(1, (len / stepM).toInt())
-            for (k in 0 until n) add(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n)
-        }
-        if (points.isNotEmpty()) points.last().let { add(it[0], it[1]) }
-        return out.toList()
-    }
-
-    fun tilesInRadius(lat: Double, lon: Double, radiusKm: Int): List<TileKey> {
-        if (radiusKm <= 0) return emptyList()
-        val dLat = radiusKm / 110.54
-        val dLon = radiusKm / (111.32 * cos(Math.toRadians(lat)).coerceAtLeast(0.05))
-        val lo = TileMath.tileOf(lat - dLat, lon - dLon)
-        val hi = TileMath.tileOf(lat + dLat, lon + dLon)
-        val mLon = 111_320.0 * cos(Math.toRadians(lat))
-        val out = ArrayList<Pair<Double, TileKey>>()
-        for (la in lo.latIdx..hi.latIdx) for (lo2 in lo.lonIdx..hi.lonIdx) {
-            val k = TileKey(la, lo2)
-            val nLat = lat.coerceIn(k.south, k.north)
-            val nLon = lon.coerceIn(k.west, k.east)
-            val d = Math.hypot((nLon - lon) * mLon, (nLat - lat) * 110_540.0)
-            if (d <= radiusKm * 1000.0) out += d to k
-        }
-        return out.sortedBy { it.first }.take(MAX_TILES).map { it.second }
-    }
-}
-
 /**
  * Festplatten-Zwischenspeicher für Kachel-Antworten (eine Datei pro Kachel, gepackt mit gzip; alte unkomprimierte
  * Dateien werden weiter gelesen). Nur java.io.
  */
+private val CAMERA_NODE = Regex("\\{[^{}]*\"id\"\\s*:\\s*(\\d+)[^{}]*\"tags\"\\s*:\\s*\\{[^{}]*\"highway\"\\s*:\\s*\"speed_camera\"")
+
+/** Alle Blitzer-IDs (highway=speed_camera) aus dem Overpass-Text einer Kachel. */
+fun cameraIds(text: String): Set<Long> {
+    if (!text.contains("speed_camera")) return emptySet()
+    return CAMERA_NODE.findAll(text).mapNotNull { it.groupValues[1].toLongOrNull() }.toSet()
+}
+
 class TileCache(private val dir: File, private val maxFiles: Int = 200_000) {
     class Entry(val text: String, val ageMs: Long)
 
@@ -214,11 +155,16 @@ class TileCache(private val dir: File, private val maxFiles: Int = 200_000) {
         } else null
     } catch (_: Exception) { null }
 
-    /** Liegt die Kachel vor und ist jünger als [maxAgeMs]? (ohne sie zu lesen) */
-    fun isFresh(key: TileKey, nowMs: Long, maxAgeMs: Long): Boolean {
-        val f = File(dir, key.fileName)
-        return f.isFile && f.length() > 0 && nowMs - f.lastModified() < maxAgeMs
-    }
+    /** Kachel der Vorversion (ohne Blitzerdaten), nur als Notlösung ohne Netz. */
+    fun readLegacy(key: TileKey, nowMs: Long): Entry? = try {
+        val f = File(dir, key.legacyFileName)
+        if (f.isFile && f.length() > 0) {
+            val raw = f.readBytes()
+            val bytes = if (raw.size > 2 && raw[0] == 0x1f.toByte() && raw[1] == 0x8b.toByte())
+                java.util.zip.GZIPInputStream(raw.inputStream()).use { it.readBytes() } else raw
+            Entry(String(bytes, Charsets.UTF_8), (nowMs - f.lastModified()).coerceAtLeast(0))
+        } else null
+    } catch (_: Exception) { null }
 
     fun write(key: TileKey, text: String) {
         try {
@@ -229,6 +175,29 @@ class TileCache(private val dir: File, private val maxFiles: Int = 200_000) {
             if (!tmp.renameTo(f)) { f.delete(); tmp.renameTo(f) }
             if (writes++ % TRIM_EVERY == 0) trimNow()
         } catch (_: Exception) { }
+    }
+
+    /** Ergebnis von [countCameras]: gespeicherte Kacheln mit Blitzerdaten, davon mit mindestens einem Blitzer, und die Zahl der Blitzer. */
+    class CameraCount(val tilesWithData: Int, val tilesWithCameras: Int, val cameras: Int, val legacyOnly: Int)
+
+    /** Zählt die Blitzer in allen gespeicherten Kacheln (liest jede Datei, nur im Hintergrund-Thread aufrufen). */
+    fun countCameras(): CameraCount {
+        val files = dir.listFiles { x -> x.name.startsWith("tile3_") && x.name.endsWith(".json") } ?: emptyArray()
+        val ids = HashSet<Long>()
+        var withCams = 0
+        for (f in files) {
+            try {
+                val raw = f.readBytes()
+                val bytes = if (raw.size > 2 && raw[0] == 0x1f.toByte() && raw[1] == 0x8b.toByte())
+                    java.util.zip.GZIPInputStream(raw.inputStream()).use { it.readBytes() } else raw
+                val found = cameraIds(String(bytes, Charsets.UTF_8))
+                if (found.isNotEmpty()) withCams++
+                ids += found
+            } catch (_: Exception) { }
+        }
+        val legacy = dir.listFiles { x -> x.name.startsWith("tile2_") && x.name.endsWith(".json") }
+            ?.count { !File(dir, it.name.replaceFirst("tile2_", "tile3_")).isFile } ?: 0
+        return CameraCount(files.size, withCams, ids.size, legacy)
     }
 
     /** Anzahl und Größe aller gespeicherten Kacheln (kann bei vielen Dateien etwas dauern, nicht im Main-Thread). */
@@ -256,8 +225,6 @@ class TileCache(private val dir: File, private val maxFiles: Int = 200_000) {
         const val VALID_MS = 180L * 24 * 3600 * 1000
         /** Älter als das (aber noch gültig): sofort benutzen und im Hintergrund erneuern. */
         const val REFRESH_MS = 30L * 24 * 3600 * 1000
-        /** Beim Vorladen werden Kacheln, die jünger sind, übersprungen. */
-        const val PRELOAD_SKIP_MS = 90L * 24 * 3600 * 1000
         const val DEFAULT_MAX_BYTES = 2L * 1024 * 1024 * 1024
         private const val TRIM_EVERY = 20
     }

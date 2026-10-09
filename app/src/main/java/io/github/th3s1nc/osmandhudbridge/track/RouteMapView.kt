@@ -8,6 +8,9 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.util.AttributeSet
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 
 /**
@@ -26,6 +29,76 @@ class RouteMapView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? 
     private var originY = 0.0
     private val tiles = HashMap<Long, Bitmap>()
     private var generation = 0
+    private val requested = HashSet<Long>()
+
+    /** Vollbild-Karte: mit einem Finger verschieben, mit zwei Fingern oder Doppeltipp zoomen, Antippen setzt die Markierung. */
+    var interactive = false
+
+    /** Eckenradius in dp (0 = eckig, für das Vollbild). */
+    var cornerDp = 12f
+
+    /** Wird mit dem Punktindex aufgerufen, wenn man in der Vollbild-Karte einen Punkt der Route antippt. */
+    var onPick: ((Int) -> Unit)? = null
+
+    private var scaleAcc = 1f
+    private val scaleDetector = ScaleGestureDetector(ctx, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScaleBegin(detector: ScaleGestureDetector): Boolean { scaleAcc = 1f; return true }
+        override fun onScale(detector: ScaleGestureDetector): Boolean {
+            scaleAcc *= detector.scaleFactor
+            if (scaleAcc > 1.6f) { zoomAt(1, detector.focusX, detector.focusY); scaleAcc = 1f }
+            else if (scaleAcc < 0.62f) { zoomAt(-1, detector.focusX, detector.focusY); scaleAcc = 1f }
+            return true
+        }
+    })
+    private val gestures = GestureDetector(ctx, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent) = true
+        override fun onScroll(e1: MotionEvent?, e2: MotionEvent, dx: Float, dy: Float): Boolean {
+            if (scaleDetector.isInProgress) return false
+            originX += dx; originY += dy
+            requestTiles(); invalidate()
+            return true
+        }
+        override fun onDoubleTap(e: MotionEvent): Boolean { zoomAt(1, e.x, e.y); return true }
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean { pick(e.x, e.y); return true }
+    })
+
+    fun zoomIn() = zoomAt(1, width / 2f, height / 2f)
+    fun zoomOut() = zoomAt(-1, width / 2f, height / 2f)
+
+    /** Wieder die ganze Route zeigen. */
+    fun fit() { layoutMap(); invalidate() }
+
+    /** Zoomstufe wechseln, der Punkt (fx, fy) auf dem Bildschirm bleibt dabei stehen. */
+    private fun zoomAt(dz: Int, fx: Float, fy: Float) {
+        val nz = (z + dz).coerceIn(MIN_Z, MAX_Z)
+        if (nz == z) return
+        val f = Math.pow(2.0, (nz - z).toDouble())
+        originX = (originX + fx) * f - fx
+        originY = (originY + fy) * f - fy
+        z = nz
+        generation++
+        tiles.clear(); requested.clear()
+        requestTiles()
+        invalidate()
+    }
+
+    private fun pick(x: Float, y: Float) {
+        if (pts.isEmpty()) return
+        var best = -1; var bestD = Float.MAX_VALUE
+        for (i in pts.indices) {
+            val dx = sx(pts[i].lon) - x; val dy = sy(pts[i].lat) - y
+            val dd = dx * dx + dy * dy
+            if (dd < bestD) { bestD = dd; best = i }
+        }
+        if (best >= 0 && bestD < (48f * d) * (48f * d)) { marker = best; invalidate(); onPick?.invoke(best) }
+    }
+
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (!interactive) return super.onTouchEvent(e)
+        scaleDetector.onTouchEvent(e)
+        gestures.onTouchEvent(e)
+        return true
+    }
 
     private val bg = Paint().apply { color = Color.parseColor("#E9E6DF") }
     private val casing = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -76,20 +149,37 @@ class RouteMapView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? 
         val cy = (MapMath.worldY(minLat, z, tilePx) + MapMath.worldY(maxLat, z, tilePx)) / 2
         originX = cx - width / 2.0
         originY = cy - height / 2.0
+        requested.clear()
+        requestTiles()
+    }
+
+    /** Fehlende Kacheln für den sichtbaren Ausschnitt anfordern. */
+    private fun requestTiles() {
+        if (width == 0 || height == 0) return
         val x0 = Math.floor(originX / tilePx).toInt()
         val x1 = Math.floor((originX + width) / tilePx).toInt()
         val y0 = Math.floor(originY / tilePx).toInt()
         val y1 = Math.floor((originY + height) / tilePx).toInt()
         val gen = generation
         val n = 1 shl z
+        if (tiles.size > 140) {
+            val it = tiles.keys.iterator()
+            while (it.hasNext()) {
+                val k = it.next()
+                val tx = (k shr 32).toInt(); val ty = k.toInt()
+                if (tx < x0 - 2 || tx > x1 + 2 || ty < y0 - 2 || ty > y1 + 2) { it.remove(); requested.remove(k) }
+            }
+        }
         for (ty in y0..y1) for (tx in x0..x1) {
             if (ty < 0 || ty >= n) continue
+            val key = (tx.toLong() shl 32) or (ty.toLong() and 0xffffffffL)
+            if (tiles.containsKey(key) || !requested.add(key)) continue
             val wx = ((tx % n) + n) % n
             TileCache.get(context, z, wx, ty) { bmp ->
                 if (bmp != null && gen == generation) {
-                    tiles[(tx.toLong() shl 32) or (ty.toLong() and 0xffffffffL)] = bmp
+                    tiles[key] = bmp
                     invalidate()
-                }
+                } else if (gen == generation) requested.remove(key)
             }
         }
     }
@@ -101,7 +191,7 @@ class RouteMapView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? 
         val w = width.toFloat()
         val h = height.toFloat()
         clip.reset()
-        clip.addRoundRect(RectF(0f, 0f, w, h), 12f * d, 12f * d, Path.Direction.CW)
+        clip.addRoundRect(RectF(0f, 0f, w, h), cornerDp * d, cornerDp * d, Path.Direction.CW)
         c.save()
         c.clipPath(clip)
         c.drawRect(0f, 0f, w, h, bg)
@@ -140,5 +230,10 @@ class RouteMapView @JvmOverloads constructor(ctx: Context, attrs: AttributeSet? 
         c.drawRect(w - tw - 10f * d, h - 15f * d, w, h, creditBg)
         c.drawText(text, w - tw - 5f * d, h - 4f * d, credit)
         c.restore()
+    }
+
+    private companion object {
+        const val MIN_Z = 3
+        const val MAX_Z = 18
     }
 }

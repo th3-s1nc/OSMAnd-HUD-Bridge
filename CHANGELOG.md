@@ -2,6 +2,101 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.78
+- Unter dem Schieber bei "Blitzer warnen" steht jetzt statt des allgemeinen Beispiels der echte ungefähre Abstand in Metern bei 50, 100 und 130 km/h. Der Text ändert sich mit dem Schieber (Kurz / Normal / Lang). Die Zahlen kommen aus derselben Rechnung wie die Warnung selbst, auf 10 m gerundet.
+- Oberfläche nicht kompiliert getestet.
+
+## v0.11.77
+- **Fehler behoben:** Mit ausgeschaltetem "HUD verbinden" beendete sich der Dienst sofort, deshalb gab es kein Tempolimit, keinen Straßennamen und keine Töne ("Live" zeigte überall "–"). Das war eine Nebenwirkung aus 0.11.72: Damals ließ das Vorladen den Dienst ungewollt weiterlaufen, und mit dem Entfernen des Vorladens fiel das weg.
+- **Jetzt:** Mit "App aktiv" an und "HUD verbinden" aus läuft der Dienst weiter, nur ohne Bluetooth: GPS, Tempolimit, Straßenname, Live-Anzeige und die Töne (Blitzer, Bahnübergang, Zebrastreifen, Verkehrsberuhigung, Kurven). Der Ton bei Überschreitung bleibt an ein verbundenes HUD gebunden. "App aktiv" aus lässt die App weiter komplett ruhen. Ist ein HUD gewünscht, wird aber 10 Minuten lang nicht gefunden, beendet sich der Dienst wie bisher.
+- Fehlt die Bluetooth-Berechtigung, startet der Dienst trotzdem (nur mit Standort), statt abzubrechen.
+- Die Beschreibungen bei "HUD verbinden" und "App aktiv" sind angepasst.
+- Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.76
+- **Neu: Warnung vor sehr scharfen Kurven** (Karte "Hinweise mit Ton", Schalter "Scharfe Kurven", Standard aus). Nur Ton (derselbe einzelne Ton wie bei Bahnübergang usw.), nichts am HUD.
+- **So funktioniert es:** Aus der Straßenform in den Kartendaten wird die engste Kurve vor dir gesucht (aktuelle Straße, bei gleichem Namen auch die anschließenden Stücke, bis etwa 450 m). Aus dem Radius folgt ein Kurventempo (Wurzel aus Querbeschleunigung mal Radius). Bist du mindestens 10 km/h schneller und kannst gerade noch bequem bremsen (2 s Reaktion, 2,5 m/s²), kommt einmal der Ton.
+- **Regler "Empfindlichkeit":** Wenig (Radius bis 30 m, 5,0 m/s²), Normal (bis 45 m, 4,0 m/s², Standard), Viel (bis 60 m, 3,0 m/s²). Gemessen an zwei aufgezeichneten Fahrten (452 km, Oberpfalz) gab das etwa 3, 5 und 7 Töne je 100 km. Die engsten Kehren sind in allen Stufen dabei.
+- **Nicht gewarnt wird:** innerorts (Ortsschild-Zone, Limit bis 50, beleuchtete Straße), in Wohn-, Zufahrts- und Fußwegen, unter etwa 40 km/h.
+- Geht auch mit online geladenen Kacheln (die Straßenform ist dort gleich). Wo OSM grob gezeichnet ist, kann eine Kurve schärfer wirken, als sie ist.
+- Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.75
+- **Neu: Karte "Hinweise mit Ton"** (Tab Tempolimit, unter der Tempowarnung): drei Schalter, alle standardmäßig aus: **Bahnübergänge**, **Zebrastreifen**, **Verkehrsberuhigung**. Es kommt ein einzelner Ton (höher als das dreifache "Dü", 780 Hz, 0,34 s), nichts am HUD. Das dreifache "Dü" bleibt für Tempoüberschreitung und Blitzer.
+- **Wann der Ton kommt:** einmal pro Punkt, nur für Punkte vor dir auf deiner Linie, nur ab etwa 20 km/h. Der Abstand hängt vom Tempo ab: Zeit zum Reagieren (2 s) plus bequemes Bremsen (2,5 m/s²), also etwa 70 m bei 50 km/h und 210 m bei 100 km/h (mindestens 40 m, höchstens 250 m). Bei Bahnübergang und Verkehrsberuhigung kommt er etwas später (60 %), weil man dort nicht anhalten muss. Liegen mehrere Punkte dicht beieinander (Zebrastreifen mit Insel), gibt es nur einen Ton.
+- **Nur mit importierten Straßendaten:** Online geladene Kacheln kennen diese Punkte nicht. Beim Einschalten ohne Import gibt es einen Hinweis. Kacheln aus dem Import von 0.11.71 oder neuer enthalten die Punkte schon, ein neuer Import ist nicht nötig.
+- Kommt später: Warnung vor scharfen Kurven (mit Regler wenig / normal / viel).
+- Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.74
+- **Tab Tempolimit neu geordnet** (nach Themen): Aktuell (Schild oben, Beschreibung darunter), Warnung (Tempowarnung), Tempolimit (Limit-Erkennung), Blitzer (alles in einer Karte: Warnung, Warnabstand, Ton, Ampelblitzer/Abschnitt/Tunnel, eigene Blitzer-Liste mit Import), Straßendaten (Import, Offline-Daten, Gespeicherte Daten).
+- **Neu: eigener Schalter "Ton bei Blitzern"**, unabhängig von der Tempowarnung. Der bisherige Schalter heißt "Ton bei Überschreitung" und gilt nur noch dafür. Beide starten mit deiner bisherigen Einstellung.
+- **Karte "Gespeicherte Daten"** enthält jetzt auch den Datenspeicher (Regler für das Speicherlimit, belegter Platz).
+- **Entfernt:** der Schalter "Tempolimit aus Kartendaten" (Hauptschalter). Die Karten "Datenquelle" und "Fehlende Limits" sind jetzt die Karte "Limit-Erkennung". Wer nichts aus dem Internet laden will, nutzt "Offline-Daten".
+- Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.73
+- **Tab Tempolimit neu geordnet:** Die Karte "Tempowarnung" enthält jetzt nur die Überschreitung (Schalter, Schwelle in km/h direkt darunter, Akustische Warnung). Die Blitzer-Warnung hat eine eigene Karte mit Warnabstand.
+- **Reihenfolge der Karten:** Tempowarnung, Blitzer-Warnung, Straßendaten importieren, Datenspeicher, Blitzer-Liste, Gespeicherte Daten, danach Datenquelle (mit "Fehlende Limits" in einer Karte zusammengelegt).
+- **"Gespeicherte Daten"** zeigt die Statistik jetzt immer an (ohne i-Knopf): Zahl der Kacheln (importiert und online geladen), belegter Platz und die Summe aus allen Importen (Straßen, Tempolimits, Zonen, Ortsschilder, Bahnübergänge, Zebrastreifen, Verkehrsberuhigung …) sowie die Blitzer-Zählung. Bei mehreren Dateien können Überschneidungen an den Rändern doppelt zählen. Der i-Knopf bei "Straßendaten importieren" zeigt weiter die Zahlen je Datei.
+- **Hinweis zum Aktualisieren:** Sind die importierten Daten älter als etwa 6 Monate, steht bei "Straßendaten importieren" eine orange Zeile "Daten vom … : ein neuer Import wäre gut." Nur ein Hinweis, keine Benachrichtigung.
+- Der Schalter heißt jetzt "Tempolimit aus Kartendaten" (statt "aus OSM-Daten"), der Erklärungstext passt zu Import und Online-Laden.
+- Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.72
+- **Neu: i-Knopf bei "Straßendaten importieren".** Er zeigt eine Zusammenfassung je eingelesener Datei: Zahl der Straßen (davon mit Tempolimit, mit Tempo-Zone, beleuchtet, Tunnel, Brücken), Ortsschilder, Temposchilder, Blitzer, Bahnübergänge, Fußgängerüberwege (davon Zebrastreifen) und Verkehrsberuhigung. Gemerkt werden die letzten 8 Dateien; "Importierte Daten entfernen" löscht auch die Zusammenfassung.
+- **Neu: Fortschrittsbalken beim Blitzer-Import** (GPX-Dateien): "Datei n von N", danach "Zusammenführen …". Der Knopf ist währenddessen gesperrt.
+- **Neue Texte:** Karte "Straßendaten importieren", Knopf "Datei wählen", kürzere Beschreibung (.osm.pbf, z. B. von Geofabrik, mehrere Regionen nacheinander möglich). Neue Karte "Gespeicherte Straßendaten" mit der Blitzer-Zählung.
+- **Entfernt (der Import ersetzt es):** "Straßendaten laden ab x km" (Vorladen), "Tour laden" (GPX-Route), Laden im Hintergrund, Schalter für mobile Daten und der Saison-Vorlauf (das Vorladen vor Saisonbeginn entfällt; die Saison selbst bleibt). Die Abhängigkeit androidx.work wurde entfernt.
+- **Bleibt:** Laden unterwegs (aktuelle Kachel und die nächste in Fahrtrichtung, ca. 3 km voraus) und die Erneuerung online geladener Kacheln nach 30 Tagen. **Importierte Kacheln werden nie online erneuert**, sie gelten immer als gültig.
+- Am Gerät noch nicht erprobt (Oberfläche und Dienst sind nicht kompiliert getestet).
+
+## v0.11.71
+- **Neu: Straßenkarten importieren** (Tab Tempolimit, neue Karte "Straßenkarten importieren"). Du lädst am Handy eine Karte als Datei (Endung .osm.pbf, zum Beispiel von Geofabrik, auch einzelne Regierungsbezirke) und wählst sie mit "Kartendatei wählen". Die App rechnet sie selbst in Kacheln um, ohne PC und ohne Internet. Fortschritt als Balken mit Prozent, Schritt (1 Straßen suchen, 2 Punkte lesen, 3 Kacheln schreiben), Zahl der fertigen Kacheln und grober Restzeit, auch in der Benachrichtigung (mit "Abbrechen"). Die Umrechnung läuft als Dienst und arbeitet in Streifen, damit wenig Arbeitsspeicher reicht (mit der Oberpfalz-Datei, 85 MB, in 15 Sekunden am Rechner, 2.186 Kacheln, 14 MB; das Handy ist am Gerät noch nicht gemessen, auch ganz Bayern ist noch nicht erprobt).
+- Die Kacheln haben das gleiche Format wie die online geladenen. Gespeichert werden befahrbare Straßen mit Tempo-Angaben (maxspeed, Richtungen, Zonen), Ortsschilder, Blitzer sowie für spätere Warnungen Bahnübergänge, Zebrastreifen, Verkehrsberuhigung und Temposchilder (diese werden noch nicht benutzt). Mehrere Regionen nacheinander werden an der Kante zusammengeführt (gleiche Straßen-Nummer: das Neue gewinnt). "Importierte Daten entfernen" löscht nur importierte Kacheln, online geladene bleiben.
+- **Neuer Schalter "Offline-Daten"** (Standard aus). An: die App lädt nichts mehr aus dem Internet (weder unterwegs noch im Voraus noch im Hintergrund) und nutzt nur gespeicherte und importierte Kacheln, auch alte. Fehlende Gebiete gelten als leer. Aus: wie bisher.
+- Die App darf jetzt mehr Arbeitsspeicher nutzen (largeHeap), neuer Dienst-Typ "Datenübertragung" für den Import. Kartendaten © OpenStreetMap-Mitwirkende (ODbL).
+
+## v0.11.70
+- **Neu: eigene Blitzer-Liste** (Tab Tempolimit, Karte "Blitzer-Liste"). Mit "GPX-Dateien wählen" importierst du eine eigene Liste, zum Beispiel von SCDB, mehrere Dateien auf einmal. Bei SCDB steht Art und Limit im Namen der Datei beziehungsweise der Kategorie (Tempo_50, Ampel_30, Abschnitt_80, Tunnel, Tempo_variabel, Kamera). Gleiche Nummern werden zusammengelegt (die Datei mit Art und Limit gewinnt gegen die allgemeine "Kamera"-Datei), Punkte unter 30 m Abstand ebenfalls. Mit den echten SCDB-Dateien ergibt das rund 6.700 Blitzer. Die Liste liegt nur im App-Speicher auf dem Handy (nicht im Projekt) und wird bei einer neuen Auswahl ersetzt; "Liste entfernen" löscht sie.
+- **Warnung mit der Liste:** Die Blitzer-Warnung nutzt die Liste zusätzlich zu den OSM-Blitzern (OSM-Blitzer näher als 30 m an einem eigenen werden weggelassen). Schalter für Ampelblitzer, Abschnittskontrolle und Tunnel (Standard an); Tempoblitzer warnen immer. Am HUD zeigt der Gefahren-Bildschirm das Tempolimit des Blitzers, wenn die Liste eines kennt.
+- Ohne Richtungsangabe in den Daten gilt wie bisher: nur Blitzer vor dir auf deiner Linie. Auf Autobahnen kann deshalb ab und zu auch ein Blitzer der Gegenseite warnen.
+
+## v0.11.69
+- **Blitzer-Zählung über alle gespeicherten Kacheln:** Unter "Straßendaten laden" steht jetzt zusätzlich eine zweite Zeile "Alle gespeicherten Kacheln: x Blitzer in y von z Kacheln mit Blitzerdaten". Sie zählt im Hintergrund (höchstens einmal pro Minute) alle gespeicherten Kacheln, auch wenn der Dienst nicht läuft, und rechnet einen Blitzer an der Kachelgrenze nur einmal. Ältere Kacheln aus der Zeit vor 0.11.66 haben noch keine Blitzerdaten und werden getrennt genannt. So siehst du, wie dicht die festen Blitzer in OpenStreetMap bei dir eingetragen sind.
+
+## v0.11.68
+- **Blitzer-Warnung: HUD schaltet kurz um.** Kommt die Warnung vor einem Blitzer, wechselt das HUD für höchstens 4 Sekunden auf den Gefahren-Bildschirm (Tempolimit, Blitzer-Symbol, Entfernung) und geht dann von selbst zurück auf die gewählte Anzeige. Ist man vorher am Blitzer vorbei, geht es früher zurück. Nicht umgeschaltet wird, wenn die nächste Abbiegung näher als 300 m ist (Kreuzung: der Pfeil bleibt sichtbar, es gibt nur den Ton), im Element-Test und in der Justage. Am Gerät noch nicht erprobt: wie schnell das HUD umschaltet.
+
+## v0.11.67
+- **Neu: Blitzer-Warnung** (Tab Tempolimit, Karte "Tempowarnung"). Schalter, standardmäßig aus; beim Einschalten kommt erst ein Hinweis (in Deutschland und einigen anderen Ländern für Fahrer nicht erlaubt), dann "Trotzdem aktivieren" oder "Abbrechen". Der Regler "Warnabstand" hat Kurz, Normal und Lang (ca. 6, 10 und 15 Sekunden vor dem Blitzer, mindestens 100 m, höchstens 600 m). Je schneller du fährst, desto früher kommt die Warnung (Normal: bei 100 km/h ca. 280 m, bei 50 km/h ca. 140 m). Gewarnt wird nur vor festen Blitzern vor dir auf deiner Straße (kein Blitzer auf der Gegenseite oder an Parallelstraßen), pro Blitzer einmal. Die Daten kommen aus OpenStreetMap, mobile Blitzer und Abschnittskontrollen fehlen. Braucht "Tempolimit aus OSM-Daten".
+- **HUD:** Das HUD bekommt während der Warnung den Kameratyp im Tempolimit-Feld und die Entfernung (Feld 25, am Gerät nur auf dem Gefahr-Bildschirm 22 bestätigt). Welche Anzeige das im Alltag zeigt, ist noch zu testen.
+- **Ton:** Neuer Warnton "dü-dü-dü" (drei weiche Töne, selbst erzeugt). Er gilt für die Tempo-Überschreitung und für Blitzer. Der Schalter "Akustische Warnung" ist jetzt auch bei ausgeschalteter Tempowarnung bedienbar, wenn die Blitzer-Warnung an ist.
+
+## v0.11.66
+- **Blitzer-Test (erster Schritt):** Die Kartendaten von OpenStreetMap enthalten jetzt zusätzlich die festen Blitzer ("highway=speed_camera"). Im Tab Werkzeuge, Karte "Straßendaten laden", steht eine Zeile "Blitzer (nur feste, aus OpenStreetMap)" mit der Zahl in den gerade geladenen Kacheln. So lässt sich prüfen, wie vollständig die Daten für deine Gegend sind. Es gibt noch keine Warnung am HUD. Bereits geladene Kacheln der Vorversion haben keine Blitzerdaten und werden beim nächsten Laden (im Hintergrund oder unterwegs) neu geholt, auch beim Vorladen. Solange kein Netz da ist, werden sie weiter für Straßen und Limits benutzt, die Blitzer sind dann unbekannt. Der alte Speicher wird beim Aufräumen nach Alter mit entfernt.
+
+## v0.11.65
+- **Element-Test:** Neu mit Testwert: Entfernung Blitzer (101), Entfernung Zwischenziel (81) sowie Höhenmeter aufwärts (83) und abwärts (84). Die Feldnummern stammen aus dem SDK und sind noch nicht am Gerät bestätigt. Bisher hatte 101 keinen Wert und blieb deshalb leer.
+
+## v0.11.64
+- **Vollbild-Karte** in "Meine Fahrten": In einer Fahrt öffnet der Knopf oben rechts an der Karte die Karte im Vollbild. Verschieben mit einem Finger, zoomen mit zwei Fingern, Doppeltipp oder Plus und Minus, "⌖" zeigt wieder die ganze Route. Ein Tipp auf die Route zeigt Tempo und Höhe an der Stelle. Die Markierung aus den Diagrammen wird mitgenommen.
+- **Element-Test:** Nicht gesehene Codes bekommen ein rotes ✗ (gesehene ein grünes ✓). Neu in der Bildschirm-Auswahl: **Gefahr (22)**, der Gefahren-Bildschirm des HUD, nur zum Ausprobieren (was er zeichnet, ist unbekannt).
+
+## v0.11.63
+- **Neu: Saison-Übersicht** oben in "Meine Fahrten": Zahl der Fahrten, Strecke, Fahrzeit, Höchsttempo, "Zu schnell: x Mal in y Fahrten" und die Strecke pro Monat als kleine Balken (der stärkste Monat in Orange). Mit den Pfeilen neben der Überschrift blätterst du durch frühere Saisons. Die Zeitspanne folgt deiner Einstellung unter Werkzeuge → Saison (auch über den Jahreswechsel, dann "2025/26"); ist keine Saison eingestellt, zählt das Kalenderjahr. Alles wird aus den gespeicherten Fahrten gerechnet. Überschreitungen zählen nur bei Fahrten, bei denen Tempolimits aufgezeichnet wurden.
+
+## v0.11.62
+- **Neu: Handy-Akku-Warnung** (Tab Anzeige, Karte "Meldungen"). Mit Schalter (Standard aus) und Regler "Warnen ab" von 5 bis 50 % (Standard 20 %). Fällt der Handy-Akku auf oder unter die Grenze, zeigt das HUD sein Akku-Warnsymbol, dauerhaft. Es verschwindet wieder, wenn der Akku 5 % über der Grenze liegt oder das Handy lädt. Das HUD zeichnet das Symbol nur in **Guide, Cruiser und Explorer** (am Gerät mit dem Element-Test festgestellt). Das Senden an das HUD ist noch nicht am Gerät bestätigt.
+
+## v0.11.61
+- **Element-Test neu aufgebaut:** Beim Öffnen schaltet das HUD in den Bildschirm, den du im Test wählst (Navigator, Minimalist, Explorer, City, Guide, Cruiser), mit den echten Live-Werten. Ein angetippter Code **blinkt 5 Sekunden**, danach ist der Bildschirm wieder normal. Erst beim Schließen des Tests geht das HUD zurück in den Modus, der unter "Anzeige" gewählt ist (die Einstellung selbst wird nie verändert). Vergisst du das Schließen, stellt die App nach 3 Minuten Ruhe alles selbst zurück.
+- **Protokoll** im Test: jede Antwort ("Gesehen" / "Nicht gesehen") mit Zeit, Modus, Code und Name, nur in diesem Menü (Teilen oder Leeren).
+- **GPS-Warnsymbol entfernt:** Kein Bildschirm zeichnet es (am Gerät geprüft). Die Funktion und der Code 37 im Test sind weg.
+
+## v0.11.60
+- **Neu: Element-Test** (Werkzeuge, Karte "HUD"): einzelne Anzeige-Codes am HUD testen, mit Protokoll. Der Ablauf wurde in 0.11.61 überarbeitet.
+
 ## v0.11.59
 - **Vorschauen:** Die Zahl im Tacho (Navigator, Explorer, City) saß zu weit links und verschwand teilweise im weißen Bogen. Sie ist jetzt mittig unter dem Bogen.
 
@@ -52,7 +147,6 @@
 ## v0.11.48
 - **Zwei neue Namen und eine neue Anzeige:** Die Anzeige "Freies Fahren" heißt jetzt **Cruiser**. Neu ist **Guide**: Abbiegepfeil mit Entfernung und darunter zwei Zeilen (Standard: Reststrecke und Restzeit). Beide sind noch Tests am HUD.
 - **Zeilen frei wählen:** An den Karten von Guide (2 Zeilen) und Cruiser (4 Zeilen) öffnet ein **Zahnrad** das Fenster "Felder wählen". Je Zeile gibt es eine Liste: Leer, Geschwindigkeit, Tempolimit, Durchschnittstempo, Reststrecke, Restzeit, Ankunft, Fahrzeit, Strecke, Höhe, nächste Straße. Die Vorschau auf der Karte zeigt die Wahl. Tempolimit und Durchschnitt teilen sich ein Feld am HUD, es geht nur eines von beiden. Werte ohne Daten (zum Beispiel Restzeit ohne Navigation) bleiben leer.
-- **GPS-Warnsymbol:** Kommt länger als 15 Sekunden keine Position, meldet die App dem HUD "GPS nicht verfügbar" (nur Guide und Cruiser, am Gerät noch nicht erprobt).
 - Die Uhrzeit wird bei Guide und Cruiser jetzt regelmäßig mitgeschickt.
 
 ## v0.11.47

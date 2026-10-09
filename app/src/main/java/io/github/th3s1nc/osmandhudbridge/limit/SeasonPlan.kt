@@ -4,11 +4,10 @@ import java.time.LocalDate
 
 /**
  * Saison von Monat zu Monat (zum Beispiel März bis Oktober, auch über den Jahreswechsel wie November bis Februar).
- * IN_SEASON: die App läuft normal. LEAD: außerhalb, aber in den [leadWeeks] Wochen vor Saisonbeginn, dann werden
- * Straßendaten geladen. OFF: die App ruht. Reine Logik ohne Android.
+ * IN_SEASON: die App läuft normal. OFF: die App ruht. Reine Logik ohne Android.
  */
-class SeasonPlan(val fromMonth: Int, val toMonth: Int, val leadWeeks: Int) {
-    enum class State { IN_SEASON, LEAD, OFF }
+class SeasonPlan(val fromMonth: Int, val toMonth: Int) {
+    enum class State { IN_SEASON, OFF }
 
     private val from = fromMonth.coerceIn(1, 12)
     private val to = toMonth.coerceIn(1, 12)
@@ -23,12 +22,5 @@ class SeasonPlan(val fromMonth: Int, val toMonth: Int, val leadWeeks: Int) {
         return s
     }
 
-    /** Ab wann im Vorlauf geladen wird; null, wenn gerade Saison ist. */
-    fun loadStart(d: LocalDate): LocalDate? = nextStart(d)?.minusWeeks(leadWeeks.toLong())
-
-    fun state(d: LocalDate): State {
-        if (inSeason(d)) return State.IN_SEASON
-        val ls = loadStart(d) ?: return State.OFF
-        return if (leadWeeks > 0 && !d.isBefore(ls)) State.LEAD else State.OFF
-    }
+    fun state(d: LocalDate): State = if (inSeason(d)) State.IN_SEASON else State.OFF
 }

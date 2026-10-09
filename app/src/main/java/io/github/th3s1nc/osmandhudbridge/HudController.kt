@@ -51,6 +51,7 @@ class HudController(private val client: HudClient) {
 
     /** Wechselt den Anzeigemodus (ShowHide + Aktivieren, danach alle Felder neu). */
     fun setMode(m: DisplayMode) {
+        if (dangerActive) endDanger()
         if (m == mode) return
         mode = m
         client.mode = m
@@ -67,6 +68,98 @@ class HudController(private val client: HudClient) {
     }
 
     private var justage = false
+
+    // ---- Element-Test: der Bildschirm des gewählten Modus ist live, ein Code blinkt ----
+    private var testRestore: DisplayMode? = null
+    /** Gesetzt, solange der Test einen Bildschirm zeigt, der kein Anzeigemodus ist (zum Beispiel 22). */
+    private var testScreenOverride: Int? = null
+    private val testScreen: Int get() = testScreenOverride ?: mode.screenId
+    private var testCode = -1
+    private var testBlinkOn = false
+    private var testBlinkEnd = 0L
+    private var testLastAct = 0L
+    private val testHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val blinkStep = object : Runnable {
+        override fun run() {
+            if (testCode < 0) return
+            val now = SystemClock.elapsedRealtime()
+            if (now >= testBlinkEnd) { stopBlink(); return }
+            testBlinkOn = !testBlinkOn
+            client.send(listOf(io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.blink(testScreen, testCode, testBlinkOn)))
+            testHandler.postDelayed(this, io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.BLINK_MS)
+        }
+    }
+
+    /** Test geöffnet oder Bildschirm gewechselt: das HUD zeigt den gewählten Modus. Die gespeicherte Einstellung bleibt. */
+    fun testShowMode(m: DisplayMode): Boolean {
+        if (!client.isReady || justage) return false
+        stopBlink()
+        if (testRestore == null) testRestore = mode
+        testLastAct = SystemClock.elapsedRealtime()
+        if (testScreenOverride != null) {
+            // vom Sonderbildschirm zurück in einen Modus: Modus auch dann neu einrichten, wenn er schon "aktuell" ist
+            testScreenOverride = null
+            if (client.send(HudProtocol.switchMode(m))) { mode = m; client.mode = m; sent = emptyMap(); routeShown = null; flush() }
+            return true
+        }
+        setMode(m)
+        return true
+    }
+
+    /** Test zeigt einen Bildschirm, der kein Anzeigemodus ist (zum Beispiel Gefahren-Bildschirm 22), ohne eigene Elemente. */
+    fun testShowScreen(screen: Int): Boolean {
+        if (!client.isReady || justage) return false
+        stopBlink()
+        if (testRestore == null) testRestore = mode
+        testLastAct = SystemClock.elapsedRealtime()
+        if (!client.send(listOf(HudProtocol.activateScreen(screen)))) return false
+        testScreenOverride = screen
+        return true
+    }
+
+    /** Code [code] 5 Sekunden blinken lassen. */
+    fun testBlink(code: Int): Boolean {
+        if (!client.isReady || justage || testRestore == null) return false
+        stopBlink()
+        val msgs = io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.start(testScreen, code)
+        if (msgs.isEmpty() || !client.send(msgs)) return false
+        testCode = code
+        testBlinkOn = true
+        testLastAct = SystemClock.elapsedRealtime()
+        testBlinkEnd = testLastAct + io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.SHOW_SECONDS * 1000L
+        BridgeBus.log("Element-Test: " + (testScreenOverride?.let { "Bildschirm $it" } ?: mode.title) + ", Code $code")
+        testHandler.postDelayed(blinkStep, io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.BLINK_MS)
+        return true
+    }
+
+    /** Blinken beenden: das Element steht wieder so wie im normalen Bildschirm, die Werte werden neu gesendet. */
+    private fun stopBlink() {
+        testHandler.removeCallbacks(blinkStep)
+        val code = testCode
+        if (code < 0) return
+        testCode = -1
+        if (!client.isReady) return
+        client.send(listOf(
+            if (testScreenOverride != null) io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.blink(testScreen, code, false)
+            else io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.finish(mode, code)
+        ))
+        sent = emptyMap()
+        if (testScreenOverride == null) flush()
+    }
+
+    /** Test geschlossen: zurück in den Modus, der unter "Anzeige" gewählt ist. */
+    fun endElementTest() {
+        stopBlink()
+        val back = testRestore ?: return
+        testRestore = null
+        if (testScreenOverride != null) {
+            testScreenOverride = null
+            if (client.isReady && client.send(HudProtocol.switchMode(back))) { mode = back; client.mode = back; sent = emptyMap(); routeShown = null; flush() }
+            return
+        }
+        setMode(back)
+    }
+
     private var brightnessStep = Int.MIN_VALUE
 
     /** Tempowarnung: an/aus und Toleranz in km/h (HUD zeigt Tempo und Limit fett ab Limit + Toleranz). */
@@ -152,11 +245,11 @@ class HudController(private val client: HudClient) {
         if (mode.usesTextSlots) flush()
     }
 
-    /** Kein GPS-Empfang (länger keine Position): das HUD zeigt sein Warnsymbol (nur Guide und Cruiser). */
-    fun setGpsLost(lost: Boolean) {
-        if (want.gpsLost == lost) return
-        want = want.copy(gpsLost = lost)
-        if (mode.usesTextSlots) flush()
+    /** Handy-Akku unter der Warngrenze (Service wertet Prozent, Laden und Grenze aus). */
+    fun setPhoneBatteryLow(low: Boolean) {
+        if (want.phoneBatteryLow == low) return
+        want = want.copy(phoneBatteryLow = low)
+        if (mode.supportsBatteryWarning) flush()
     }
 
     /** Gewählte Zeilen von Guide/Cruiser haben sich geändert: Textfelder neu senden, dann alle Felder. */
@@ -175,6 +268,45 @@ class HudController(private val client: HudClient) {
     fun setLimit(kmh: Int, estimated: Boolean = false) {
         want = want.copy(speedLimitKmh = kmh, limitEstimated = estimated && kmh > 0)
         flush()
+    }
+
+    // ---- Blitzer-Warnung: kurz auf den Gefahren-Bildschirm (22) umschalten ----
+    private var dangerActive = false
+    private val dangerHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val dangerEnd = Runnable { endDanger() }
+
+    /**
+     * Blitzer vor dir: Entfernung in Metern, null = keiner. Das HUD bekommt Kameratyp 1 und die Entfernung.
+     * [newWarning]: Das ist ein neuer Blitzer; dann zeigt das HUD kurz den Gefahren-Bildschirm, außer eine Abbiegung
+     * ist nah (unter 300 m), im Test oder in der Justage.
+     */
+    fun setCamera(distanceM: Int?, newWarning: Boolean = false, limitKmh: Int = 0) {
+        val type = if (distanceM != null) 1 else CameraType.NONE
+        val lim = if (distanceM != null) limitKmh else 0
+        if (want.camera != type || want.cameraDistanceM != distanceM || want.cameraLimitKmh != lim) {
+            want = want.copy(camera = type, cameraDistanceM = distanceM, cameraLimitKmh = lim)
+            flush()
+        }
+        if (distanceM == null) { if (dangerActive) endDanger(); return }
+        if (newWarning && !dangerActive && client.isReady && !justage && testRestore == null &&
+            !io.github.th3s1nc.osmandhudbridge.limit.CameraWarn.blockedByTurn(want.partDistanceM, want.command != null)
+        ) {
+            if (client.send(HudProtocol.dangerOn())) {
+                dangerActive = true
+                dangerHandler.postDelayed(dangerEnd, io.github.th3s1nc.osmandhudbridge.limit.CameraWarn.DANGER_SHOW_MS)
+                BridgeBus.log("Blitzer: Gefahren-Bildschirm")
+            }
+        }
+    }
+
+    /** Gefahren-Bildschirm wieder verlassen: zurück auf den gewählten Anzeigemodus. */
+    private fun endDanger() {
+        dangerHandler.removeCallbacks(dangerEnd)
+        if (!dangerActive) return
+        dangerActive = false
+        if (!client.isReady) return
+        val back = listOf(HudProtocol.dangerOff()) + HudProtocol.switchMode(mode)
+        if (client.send(back)) { sent = emptyMap(); routeShown = null; flush() }
     }
 
     /** ttlMs: nach dieser Zeit ohne neues Update wird Pfeil/Distanz geleert (null = nie). */
@@ -347,6 +479,9 @@ class HudController(private val client: HudClient) {
     }
 
     fun onReady() {
+        dangerActive = false
+        dangerHandler.removeCallbacks(dangerEnd)
+        testScreenOverride = null
         justage = false // der Verbindungsaufbau aktiviert den normalen Bildschirm wieder
         sent = emptyMap()
         routeShown = null
@@ -377,6 +512,7 @@ class HudController(private val client: HudClient) {
                 onOverspeed?.invoke()
             }
         } else alarm.pause()
+        if (testRestore != null && now - testLastAct > TEST_MAX_MS) endElementTest() // Sicherheit, falls das Menü nicht sauber geschlossen wurde
         if (client.isReady && now - lastSendAt > KEEPALIVE_MS) {
             // Lebenszeichen: Uhrzeit erneut senden. Das HUD quittiert, ein totes Gerät fällt so auf.
             sent = sent - HudProtocol.F_TIME
@@ -399,7 +535,7 @@ class HudController(private val client: HudClient) {
     }
 
     private fun flush(force: Boolean = false) {
-        if (!client.isReady || justage) return
+        if (!client.isReady || justage || testScreenOverride != null) return
         val eff = effective()
         val wantFields = HudProtocol.encodeState(eff, mode)
         if (force) sent = emptyMap()
@@ -421,6 +557,7 @@ class HudController(private val client: HudClient) {
         const val NAV_TTL_MS = 60_000L
         const val MAX_EXTRAPOLATE_S = 4f
         const val KEEPALIVE_MS = 10_000L
+        const val TEST_MAX_MS = 180_000L
         const val CALL_MAX_S = 120
         const val MSG_SHOW_S = 5
         const val MUSIC_PART_S = 4

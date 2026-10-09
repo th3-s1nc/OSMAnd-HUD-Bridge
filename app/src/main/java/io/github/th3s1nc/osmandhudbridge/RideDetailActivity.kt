@@ -30,6 +30,7 @@ class RideDetailActivity : AppCompatActivity() {
     private var points: List<TrackPoint> = emptyList()
     private val charts = ArrayList<RideChartView>()
     private lateinit var map: RouteMapView
+    private var markerIdx = -1
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -51,6 +52,9 @@ class RideDetailActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnRename).setOnClickListener { rename() }
         findViewById<View>(R.id.btnShare).setOnClickListener { chooseShare() }
         findViewById<View>(R.id.btnOpenMap).setOnClickListener { openInMapApp() }
+        findViewById<View>(R.id.btnFullMap).setOnClickListener {
+            startActivity(Intent(this, RideMapActivity::class.java).putExtra(EXTRA_ID, ride.id).putExtra(RideMapActivity.EXTRA_MARKER, markerIdx))
+        }
         showHeader()
 
         if (points.size >= 2) {
@@ -58,7 +62,7 @@ class RideDetailActivity : AppCompatActivity() {
             buildTiles()
             buildCharts()
         } else {
-            map.visibility = View.GONE
+            findViewById<View>(R.id.mapBox).visibility = View.GONE
             findViewById<TextView>(R.id.tvHint).text = "Zu dieser Fahrt sind keine Punkte gespeichert."
         }
     }
@@ -147,6 +151,7 @@ class RideDetailActivity : AppCompatActivity() {
     private fun select(i: Int) {
         for (c in charts) c.setMarker(i)
         map.setMarker(i)
+        markerIdx = i
     }
 
     private fun buildCharts() {

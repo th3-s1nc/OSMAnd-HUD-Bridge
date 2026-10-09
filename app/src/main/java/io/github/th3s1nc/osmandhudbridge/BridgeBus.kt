@@ -63,17 +63,13 @@ object BridgeBus {
     @Volatile var gps = "GPS: –"
     @Volatile var osm = "OSMAnd: –"
     @Volatile var limit = "Limit: –"
-    @Volatile var preload = "–"
+    /** Blitzer in den geladenen Kacheln (nur Test der Datenqualität). */
+    @Volatile var cameras = "–"
+    /** Blitzer in allen gespeicherten Kacheln (Hintergrundzählung der Oberfläche). */
+    @Volatile var camerasAll = "wird gezählt …"
     /** Ausführliches Protokoll: jede Wiederholung einzeln, nichts wird zusammengefasst. */
     @Volatile var verbose = false
     @Volatile var onChange: (() -> Unit)? = null
-
-    /** Status des Vorladens (nur anzeigen, kein Logeintrag). */
-    fun updatePreload(text: String) {
-        if (text == preload) return
-        preload = text
-        changed()
-    }
 
     @Synchronized
     fun log(msg: String) {

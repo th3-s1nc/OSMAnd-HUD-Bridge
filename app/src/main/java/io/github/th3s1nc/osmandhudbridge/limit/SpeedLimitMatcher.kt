@@ -13,7 +13,11 @@ class Way(val id: Long, val points: List<DoubleArray>, val tags: Map<String, Str
 class Sign(val id: Long, val lat: Double, val lon: Double, val tags: Map<String, String>)
 
 /** Inhalt einer Kachel. */
-class TileData(val ways: List<Way>, val signs: List<Sign>)
+/** Ein fester Blitzer (OSM-Punkt mit highway=speed_camera). Richtung und Limit stehen, wenn eingetragen, in den Tags. */
+class Camera(val id: Long, val lat: Double, val lon: Double, val tags: Map<String, String>)
+
+/** [hasCameras] ist false bei Kacheln aus der alten Version ohne Blitzerdaten (dann sind die Blitzer unbekannt, nicht null). */
+class TileData(val ways: List<Way>, val signs: List<Sign>, val cameras: List<Camera> = emptyList(), val hasCameras: Boolean = true, val points: List<WarnPoint> = emptyList())
 
 /** Innerorts oder außerorts, so wie es das zuletzt passierte Ortsschild sagt. */
 enum class Zone { INNER, OUTER }

@@ -64,6 +64,9 @@ enum class DisplayMode(
     /** Erste Zeile dieses Modus in der Textfeld-Konfiguration mit sechs Zeilen (Guide 0-1, Cruiser 2-5). */
     val slotStart: Int get() = if (this == GUIDE) 0 else 2
 
+    /** Handy-Akku-Warnsymbol: laut Test am HUD nur in Guide, Cruiser und Explorer sichtbar. */
+    val supportsBatteryWarning: Boolean get() = this == GUIDE || this == TRACKING || this == EXPLORER
+
     /** Anruf-/Nachrichten-Anzeige: laut Test am HUD nur in Explorer und City sichtbar. */
     val supportsEvents: Boolean get() = this == EXPLORER || this == CITY
 

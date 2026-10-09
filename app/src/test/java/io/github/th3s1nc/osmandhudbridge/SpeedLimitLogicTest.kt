@@ -1,6 +1,7 @@
 package io.github.th3s1nc.osmandhudbridge
 
 import io.github.th3s1nc.osmandhudbridge.limit.Backoff
+import io.github.th3s1nc.osmandhudbridge.limit.cameraIds
 import io.github.th3s1nc.osmandhudbridge.limit.LimitTracker
 import io.github.th3s1nc.osmandhudbridge.limit.MatchOptions
 import io.github.th3s1nc.osmandhudbridge.limit.NeighborIndex
@@ -14,7 +15,6 @@ import io.github.th3s1nc.osmandhudbridge.limit.TileCache
 import io.github.th3s1nc.osmandhudbridge.limit.TileKey
 import io.github.th3s1nc.osmandhudbridge.limit.TileMath
 import io.github.th3s1nc.osmandhudbridge.limit.Way
-import io.github.th3s1nc.osmandhudbridge.limit.PreloadPlanner
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -83,8 +83,6 @@ class SpeedLimitLogicTest {
             // Alter wird aus der Dateizeit berechnet
             File(dir, k.fileName).setLastModified(System.currentTimeMillis() - 40L * 24 * 3600 * 1000)
             assertTrue(cache.read(k, System.currentTimeMillis())!!.ageMs > TileCache.REFRESH_MS)
-            assertFalse(cache.isFresh(k, System.currentTimeMillis(), TileCache.REFRESH_MS))
-            assertTrue(cache.isFresh(k, System.currentTimeMillis(), TileCache.VALID_MS))
             // mehr als maxFiles: die ältesten fliegen raus, die neueste bleibt
             for (i in 10..14) {
                 cache.write(TileKey(i, i), "x$i")
@@ -201,19 +199,6 @@ class SpeedLimitLogicTest {
         } finally { dir.deleteRecursively() }
     }
 
-    @Test fun preloadPlanCoversRadiusNearestFirst() {
-        val lat = 48.0107
-        val lon = 11.0121
-        assertEquals(0, PreloadPlanner.tilesInRadius(lat, lon, 0).size)
-        val t10 = PreloadPlanner.tilesInRadius(lat, lon, 10)
-        val t50 = PreloadPlanner.tilesInRadius(lat, lon, 50)
-        assertTrue("10 km: ${t10.size}", t10.size in 55..110)
-        assertTrue("50 km: ${t50.size}", t50.size in 1400..2000)
-        assertEquals(TileMath.tileOf(lat, lon), t10[0]) // eigene Kachel zuerst
-        assertTrue(t10.toSet().size == t10.size)
-        assertTrue(t10.all { it in t50 })
-    }
-
     @Test fun extraTagsGiveRealLimits() {
         assertEquals(30, SpeedLimitMatcher.extraTagLimit(mapOf("highway" to "residential", "zone:maxspeed" to "DE:30")))
         assertEquals(50, SpeedLimitMatcher.extraTagLimit(mapOf("highway" to "residential", "source:maxspeed" to "DE:urban")))
@@ -307,22 +292,6 @@ class SpeedLimitLogicTest {
     }
 
     @Test
-    fun corridorLiesAheadOfTheDriver() {
-        val lat = 48.0107; val lon = 11.0121
-        val here = TileMath.tileOf(lat, lon)
-        val north = PreloadPlanner.corridor(lat, lon, 0.0, 20)
-        assertEquals(here, north.first())
-        assertEquals(north.size, north.toSet().size)
-        assertTrue(north.all { it.latIdx >= here.latIdx - 1 })
-        assertTrue(north.any { it.latIdx >= here.latIdx + 8 })
-        assertTrue(north.size in 10..40)
-        val east = PreloadPlanner.corridor(lat, lon, 90.0, 20)
-        assertTrue(east.any { it.lonIdx >= here.lonIdx + 6 })
-        assertTrue(east.all { it.lonIdx >= here.lonIdx })
-        assertTrue(PreloadPlanner.corridor(lat, lon, 0.0, 0).isEmpty())
-    }
-
-    @Test
     fun serverPool_pausiertAusgefallene() {
         val p = ServerPool(listOf("a", "b", "c", "d"), 1000L)
         assertEquals(listOf("a", "b", "c"), p.race(0L, 3))
@@ -370,5 +339,33 @@ class SpeedLimitLogicTest {
         assertEquals("7 Fehlversuche (6x timeout, 1x HTTP 403)", r.take())
         assertTrue(r.isEmpty())
         assertEquals(null, r.take())
+    }
+
+    @Test
+    fun blitzerIdsAusOverpassText() {
+        val compact = """{"elements":[{"type":"way","id":5,"nodes":[1,2],"tags":{"highway":"primary"}},{"type":"node","id":11,"lat":50.1,"lon":8.1,"tags":{"highway":"speed_camera","maxspeed":"50"}},{"type":"node","id":12,"lat":50.2,"lon":8.2,"tags":{"highway":"speed_camera"}},{"type":"node","id":13,"lat":50.3,"lon":8.3,"tags":{"highway":"traffic_signals"}}]}"""
+        assertEquals(setOf(11L, 12L), cameraIds(compact))
+        val pretty = "{\n \"elements\": [\n  {\n   \"type\": \"node\",\n   \"id\": 77,\n   \"lat\": 1.0,\n   \"lon\": 2.0,\n   \"tags\": {\n    \"highway\": \"speed_camera\"\n   }\n  }\n ]\n}"
+        assertEquals(setOf(77L), cameraIds(pretty))
+        assertEquals(emptySet<Long>(), cameraIds("""{"elements":[{"type":"node","id":1,"lat":1,"lon":2,"tags":{"highway":"stop"}}]}"""))
+    }
+
+    @Test
+    fun blitzerZaehlungUeberAlleGespeichertenKacheln() {
+        val dir = java.io.File.createTempFile("tiles", "").also { it.delete(); it.mkdirs() }
+        try {
+            fun put(name: String, text: String) = java.io.File(dir, name).writeText(text)
+            val cam = """{"elements":[{"type":"node","id":11,"lat":1,"lon":2,"tags":{"highway":"speed_camera"}}]}"""
+            put("tile3_1_1.json", cam)
+            put("tile3_1_2.json", cam) // gleicher Blitzer an der Kachelgrenze: zählt einmal
+            put("tile3_2_2.json", """{"elements":[]}""")
+            put("tile2_9_9.json", """{"elements":[]}""")  // Vorversion ohne Blitzerdaten, kein tile3 dazu
+            put("tile2_1_1.json", """{"elements":[]}""")  // hat schon eine neue Kachel
+            val c = TileCache(dir).countCameras()
+            assertEquals(3, c.tilesWithData)
+            assertEquals(2, c.tilesWithCameras)
+            assertEquals(1, c.cameras)
+            assertEquals(1, c.legacyOnly)
+        } finally { dir.deleteRecursively() }
     }
 }
