@@ -2,6 +2,63 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.89
+- **Fehler behoben:** Bei "Speicherplatz" stand dauerhaft "Belegt: –". Das Ergebnis der Zählung wird jetzt sofort angezeigt, bis dahin steht dort "wird berechnet …".
+- Hinweis: nicht kompiliert getestet.
+
+## v0.11.88
+- **Tab Tempolimit:** Die Karte "Gespeicherte Daten" hat jetzt eine eigene Überschrift **SPEICHER** und gehört damit nicht mehr optisch zu Blitzer.
+- Hinweis: Oberfläche nicht kompiliert getestet.
+
+## v0.11.87
+- **Tab Tempolimit:** Reihenfolge angepasst: Straßendaten importieren, dann **Blitzer** (zugeklappt, zum Aufklappen), ganz am Ende **Gespeicherte Straßendaten**.
+- Hinweis: Oberfläche nicht kompiliert getestet.
+
+## v0.11.86
+- **Tab Tempolimit:** Die Karte **Straßendaten** steht jetzt über **Blitzer**. Die Blitzer-Karte ist beim Start **zugeklappt** und zeigt nur die Überschrift mit einem Pfeil. Ein Tipp auf die Überschrift klappt sie auf oder zu, die App merkt sich den Zustand. Die Funktion ist unverändert: Ist die Blitzer-Warnung an, warnt die App auch bei zugeklappter Karte.
+- Hinweis: Oberfläche nicht kompiliert getestet.
+
+## v0.11.85
+- **Neu: Schalter "Mobile Daten"** in der Karte "Straßendaten" (immer sichtbar, standardmäßig aus, bleibt gespeichert). Er lässt sich jederzeit umschalten, auch mitten im Download.
+- **An:** Der Download läuft ohne Rückfrage auch über Mobilfunk weiter, wenn das WLAN weg ist, und verbindet sich nach Unterbrechungen selbst neu (pausiert erst nach etwa 5 Minuten ohne Fortschritt).
+- **Aus:** Der Download pausiert, sobald du das WLAN verlässt, und fragt vor dem Fortsetzen im Mobilfunk. Schaltest du ihn an, während er deswegen pausiert, geht es automatisch weiter.
+- **WLAN hat immer Vorrang:** Kommt das WLAN zurück, wechselt der Download dorthin und macht an derselben Stelle weiter.
+- Der Schalter wird nie automatisch zurückgesetzt.
+- Hinweis: Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.84
+- **Neu: "Region laden"** (Tab Tempolimit, Karte "Straßendaten importieren"). Statt die Kartendatei am PC zu holen, wählst du in der App eine Region (Europa → Land → Bundesland → Regierungsbezirk) aus dem Verzeichnis von Geofabrik. Die App fragt die Größe ab und lädt nur nach deiner Bestätigung. Danach liest sie die Datei mit dem bekannten Import ein und **löscht die Datei anschließend**.
+- **Pausieren / Fortsetzen / Verwerfen:** Der Download kann pausiert und später (auch nach einem Neustart der App) an derselben Stelle fortgesetzt werden. "Verwerfen" löscht die halbe Datei. Auch in der Benachrichtigung gibt es "Pausieren".
+- **Mobilfunk:** Kein neuer Schalter. Im WLAN startet der Download direkt, im Mobilfunk fragt die App vorher mit der Größe nach ("Trotzdem laden"). Wechselt die Verbindung mitten im Download vom WLAN auf Mobilfunk, pausiert er von selbst. Ist **Offline-Daten** an, ist "Region laden" gesperrt.
+- **Aktualisieren:** Die zuletzt geladene Region wird mit Datum angezeigt und lässt sich mit "Aktualisieren" neu laden.
+- Vor dem Laden prüft die App den freien Speicher (etwa 2,5-fache Dateigröße plus 50 MB). Bei großen Regionen (mit Unterregionen, zum Beispiel ganz Bayern) kommt eine Warnung wegen des Arbeitsspeichers beim Einlesen; besser einzelne Regierungsbezirke laden.
+- Lädt nie von selbst, nur auf deinen Tipp. Das Verzeichnis der Regionen wird bis zu 7 Tage zwischengespeichert.
+- Die Größen stehen in der Rückfrage, nicht in der Liste (das Verzeichnis enthält keine Größen).
+- Test der Verzeichnis-Auswertung mit selbst geschriebenem Beispiel im Format von Geofabrik; gegen das echte Verzeichnis und den Download selbst noch nicht geprüft. Oberfläche und Dienst sind nicht kompiliert getestet.
+
+## v0.11.83
+- **Fehler behoben:** Nach dem Ausschalten der App ("App aktiv" aus oder "Beenden") blieb manchmal eine Meldung in der Statusleiste zurück ("Ohne HUD: wartet auf die Verbindung …"). Beim Beenden stoppte die HUD-Verbindung noch einmal und zeigte dabei die Meldung neu an, obwohl der Dienst schon aus war. Jetzt wird beim Beenden keine Meldung mehr gezeigt und eine eventuell vorhandene entfernt.
+- Der Meldungstext ohne HUD ist verständlicher: "Läuft ohne HUD: Tempolimit und Straße, GPS im Sparmodus" (im Auto-Modus: "Auto-Modus: Tempolimit, Straße und Töne ohne HUD"). Er sagt nicht mehr "wartet auf die Verbindung".
+- Dienst und Oberfläche sind nicht kompiliert getestet.
+
+## v0.11.82
+- **Fehler behoben:** Die Live-Werte in der App (Tempo, Tempolimit, Straßenname, Schild in "Aktuell", Karte "Live" auf der Übersicht, Protokoll) wurden nur aufgefrischt, wenn zufällig eine andere Meldung kam, und hinkten deshalb stark nach. Jetzt werden sie jede Sekunde aktualisiert, solange die App offen ist. Das HUD war nicht betroffen, es bekam das Tempo schon immer direkt.
+- Ohne HUD und ohne Auto-Modus fragt das GPS weiterhin nur alle 30 Sekunden (Sparmodus), die Anzeige zeigt dann natürlich entsprechend seltener neue Werte.
+- Oberfläche nicht kompiliert getestet.
+
+## v0.11.81
+- Der Schalter in der Karte "Aktuell" heißt jetzt **"Stay awake"** (vorher "Display anlassen"). Sonst keine Änderung.
+
+## v0.11.80
+- **Neu: Schalter "Stay awake" (zuerst "Display anlassen")** in der Karte "Aktuell" (Tab Tempolimit), Standard aus, mit i-Knopf. Der Bildschirm bleibt an, solange die App vorne offen ist (zum Beispiel bei Testfahrten im Auto). Öffnest du eine andere App, gilt wieder die normale Zeit; die Warnungen laufen im Hintergrund weiter. Kostet viel Akku, am besten mit Ladekabel.
+- Oberfläche nicht kompiliert getestet.
+
+## v0.11.79
+- **Neu: Auto-Modus** (Tab Werkzeuge, Karte "Auto-Modus (Testfahrt)"), Standard aus. Zum Ausprobieren im Auto ohne HUD: Das GPS wird jede Sekunde abgefragt (ohne HUD sonst nur alle 30 s, das war für die Töne zu selten) und auch der Ton bei Tempo-Überschreitung geht ohne verbundenes HUD. Blitzer, Hinweistöne und Kurven laufen damit wie am Motorrad. Verbraucht mehr Akku. Der Dienst beendet sich im Auto-Modus nicht, wenn kein HUD gefunden wird.
+- **Neu:** Im Tab Tempolimit unter "Aktuell" steht jetzt der erkannte Straßenname ("Straße: …"), damit man Schild und Straße zusammen prüfen kann.
+- Hinweis zu 0.11.77: Ohne HUD und ohne Auto-Modus läuft das GPS weiter im Sparmodus (alle 30 s), die Töne kommen dann oft zu spät oder gar nicht.
+- Oberfläche und Dienst sind nicht kompiliert getestet.
+
 ## v0.11.78
 - Unter dem Schieber bei "Blitzer warnen" steht jetzt statt des allgemeinen Beispiels der echte ungefähre Abstand in Metern bei 50, 100 und 130 km/h. Der Text ändert sich mit dem Schieber (Kurz / Normal / Lang). Die Zahlen kommen aus derselben Rechnung wie die Warnung selbst, auf 10 m gerundet.
 - Oberfläche nicht kompiliert getestet.

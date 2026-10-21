@@ -51,6 +51,10 @@ object ImportBus {
 class ImportService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private var wake: PowerManager.WakeLock? = null
+    private var regionId: String? = null
+    private var regionName: String? = null
+    private var regionUrl: String? = null
+    private var deleteAfter = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -63,7 +67,11 @@ class ImportService : Service() {
             if (!ImportBus.running) stopSelf()
             return START_NOT_STICKY
         }
-        val name = nameOf(uri)
+        regionId = intent?.getStringExtra(EXTRA_REGION_ID)
+        regionName = intent?.getStringExtra(EXTRA_REGION_NAME)
+        regionUrl = intent?.getStringExtra(EXTRA_REGION_URL)
+        deleteAfter = intent?.getBooleanExtra(EXTRA_DELETE_AFTER, false) ?: false
+        val name = regionName ?: nameOf(uri)
         ImportBus.apply { running = true; cancel = false; fileName = name; step = 1; fraction = 0.0; stepText = "Straßen suchen"; tiles = 0; eta = ""; message = null }
         ImportBus.changed()
         try { startFg(buildNotification("$name: wird gelesen", 0, true)) } catch (e: Exception) {
@@ -115,6 +123,10 @@ class ImportService : Service() {
                 .putString(BridgeService.KEY_IMPORT_INFO, info)
                 .putString(BridgeService.KEY_IMPORT_SUB, "Eingelesen am $date aus $name")
                 .apply()
+            if (regionId != null) {
+                sp.edit().putString(BridgeService.KEY_REGION_ID, regionId).putString(BridgeService.KEY_REGION_NAME, regionName)
+                    .putString(BridgeService.KEY_REGION_URL, regionUrl).putString(BridgeService.KEY_REGION_DATE, date).apply()
+            }
             val total = outDir.listFiles { f -> f.name.endsWith(".json") }?.sumOf { it.length() } ?: 0L
             val limit = getSharedPreferences(BridgeService.PREFS, Context.MODE_PRIVATE).getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB).toLong() * 1_048_576L
             BridgeBus.log("Import der Straßendaten: $name, ${r.tiles} Kacheln, ${r.ways} Straßen, ${r.points} Punkte, ${r.seconds} s")
@@ -126,6 +138,7 @@ class ImportService : Service() {
             if (e is OutOfMemoryError) "Zu wenig Arbeitsspeicher für diese Datei. Nimm eine kleinere Region (zum Beispiel einen Regierungsbezirk)."
             else "Fehler: ${e.message ?: e.javaClass.simpleName}"
         }
+        if (deleteAfter) { try { uri.path?.let { File(it).delete() } } catch (_: Exception) { } } // die große Datei wird nicht mehr gebraucht
         main.post { finish(msg) }
     }
 
@@ -164,7 +177,7 @@ class ImportService : Service() {
         } ?: (uri.lastPathSegment ?: "Datei")
     } catch (_: Exception) { uri.lastPathSegment ?: "Datei" }
 
-    private fun sizeOf(uri: Uri): Long = try {
+    private fun sizeOf(uri: Uri): Long = if (uri.scheme == "file") (uri.path?.let { File(it).length() } ?: 0L) else try {
         contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
             if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else 0L
         } ?: 0L
@@ -209,9 +222,14 @@ class ImportService : Service() {
         private const val CHANNEL = "import"
         private const val NOTIF_ID = 31
         const val ACTION_CANCEL = "io.github.th3s1nc.osmandhudbridge.IMPORT_CANCEL"
+        private const val EXTRA_REGION_ID = "region_id"
+        private const val EXTRA_REGION_NAME = "region_name"
+        private const val EXTRA_REGION_URL = "region_url"
+        private const val EXTRA_DELETE_AFTER = "delete_after"
 
-        fun start(ctx: Context, uri: Uri) {
+        fun start(ctx: Context, uri: Uri, regionId: String? = null, regionName: String? = null, regionUrl: String? = null, deleteAfter: Boolean = false) {
             val i = Intent(ctx, ImportService::class.java).setData(uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .putExtra(EXTRA_REGION_ID, regionId).putExtra(EXTRA_REGION_NAME, regionName).putExtra(EXTRA_REGION_URL, regionUrl).putExtra(EXTRA_DELETE_AFTER, deleteAfter)
             ContextCompat.startForegroundService(ctx, i)
         }
     }

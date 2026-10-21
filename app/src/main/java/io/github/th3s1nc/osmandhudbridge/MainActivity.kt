@@ -88,6 +88,8 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         BridgeBus.onChange = { refresh() }
         ImportBus.onChange = { refreshMap() }
+        DownloadBus.onChange = { refreshDownload() }
+        DownloadService.restore(this)
         refreshMap()
         autoConnect()
         refresh()
@@ -99,6 +101,7 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() {
         BridgeBus.onChange = null
         ImportBus.onChange = null
+        DownloadBus.onChange = null
         trackHandler.removeCallbacks(trackTick)
         super.onStop()
     }
@@ -180,6 +183,21 @@ class MainActivity : AppCompatActivity() {
         setupInfoToggle(R.id.btnInfoWarn, R.id.tvInfoWarn)
         setupInfoToggle(R.id.btnInfoSound, R.id.tvInfoSound)
         setupInfoToggle(R.id.btnInfoCamera, R.id.tvInfoCamera)
+        // Karte Blitzer: zugeklappt nur mit Überschrift, Zustand wird gemerkt
+        run {
+            val box = findViewById<View>(R.id.boxBlitzer)
+            val arrow = findViewById<TextView>(R.id.tvBlitzerArrow)
+            fun show(open: Boolean) {
+                box.visibility = if (open) View.VISIBLE else View.GONE
+                arrow.text = if (open) "▲" else "▼"
+            }
+            show(prefs.getBoolean(BridgeService.KEY_CAM_OPEN, false))
+            findViewById<View>(R.id.hdrBlitzer).setOnClickListener {
+                val open = box.visibility != View.VISIBLE
+                show(open)
+                prefs.edit().putBoolean(BridgeService.KEY_CAM_OPEN, open).apply()
+            }
+        }
         setupInfoToggle(R.id.btnInfoOffline, R.id.tvInfoOffline)
         setupInfoToggle(R.id.btnInfoCamRed, R.id.tvInfoCamRed)
         setupInfoToggle(R.id.btnInfoCamSection, R.id.tvInfoCamSection)
@@ -576,6 +594,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.boxCamList).visibility = if (has) View.VISIBLE else View.GONE
     }
 
+    private val regionLoader by lazy { RegionLoader(this) }
+
     private val pickMap = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) { }
@@ -583,9 +603,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Region-Download: Balken, Pausieren/Fortsetzen/Verwerfen, geladene Region. Leicht genug für den Takt des Downloads. */
+    private fun refreshDownload() {
+        val st = DownloadBus.state
+        val box = findViewById<View>(R.id.boxDlProgress)
+        box.visibility = if (st == DlState.IDLE) View.GONE else View.VISIBLE
+        findViewById<MaterialButton>(R.id.btnRegionLoad).isEnabled = !ImportBus.running && st == DlState.IDLE
+        val region = prefs.getString(BridgeService.KEY_REGION_ID, null)
+        findViewById<View>(R.id.boxRegion).visibility = if (region == null || st != DlState.IDLE || ImportBus.running) View.GONE else View.VISIBLE
+        if (region != null) {
+            findViewById<TextView>(R.id.tvRegionInfo).text =
+                (prefs.getString(BridgeService.KEY_REGION_NAME, null) ?: "–") + ", " + (prefs.getString(BridgeService.KEY_REGION_DATE, null) ?: "–")
+        }
+        if (st == DlState.IDLE) return
+        val frac = io.github.th3s1nc.osmandhudbridge.limit.RegionDownload.fraction(DownloadBus.done, DownloadBus.total)
+        findViewById<TextView>(R.id.tvDlName).text = DownloadBus.name
+        findViewById<com.google.android.material.progressindicator.LinearProgressIndicator>(R.id.barDl)
+            .setProgressCompat((frac * 1000).toInt().coerceIn(0, 1000), false)
+        val sizes = io.github.th3s1nc.osmandhudbridge.limit.RegionDownload.sizeText(DownloadBus.done) + " von " +
+            io.github.th3s1nc.osmandhudbridge.limit.RegionDownload.sizeText(DownloadBus.total)
+        findViewById<TextView>(R.id.tvDlText).text =
+            (if (st == DlState.PAUSED) "Pausiert bei " else "") + "${(frac * 100).toInt()} %  ·  " + sizes
+        findViewById<TextView>(R.id.tvDlNote).text = DownloadBus.note
+        findViewById<MaterialButton>(R.id.btnDlPause).text = if (st == DlState.RUNNING) "Pausieren" else "Fortsetzen"
+        findViewById<View>(R.id.btnDlDiscard).visibility = if (st == DlState.PAUSED) View.VISIBLE else View.GONE
+    }
+
     /** Karte "Straßendaten importieren": Fortschritt während des Imports, sonst Ergebnis und Zahl der importierten Kacheln. */
     private fun refreshMap() {
         val running = ImportBus.running
+        refreshDownload()
         findViewById<View>(R.id.boxMapProgress).visibility = if (running) View.VISIBLE else View.GONE
         findViewById<MaterialButton>(R.id.btnMapPick).isEnabled = !running
         val stat = findViewById<TextView>(R.id.tvMapStat)
@@ -806,6 +853,29 @@ class MainActivity : AppCompatActivity() {
         refreshCamList()
 
         // Straßendaten importieren (.osm.pbf) und Schalter "Offline-Daten"
+        findViewById<MaterialSwitch>(R.id.swDlMobile).apply {
+            isChecked = prefs.getBoolean(BridgeService.KEY_DL_MOBILE, false)
+            setOnCheckedChangeListener { _, on ->
+                prefs.edit().putBoolean(BridgeService.KEY_DL_MOBILE, on).apply()
+                // War der Download nur pausiert, weil das WLAN weg war: jetzt von selbst weitermachen
+                if (on && DownloadBus.state == DlState.PAUSED && DownloadBus.pausedForMobile && !prefs.getBoolean(BridgeService.KEY_OFFLINE, false)) {
+                    DownloadService.start(this@MainActivity, null, null, null, false)
+                }
+            }
+        }
+        findViewById<View>(R.id.btnInfoDlMobile).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Mobile Daten")
+                .setMessage("Aus: Die Region wird nur im WLAN geladen. Fällt das WLAN weg, pausiert der Download.\n\nAn: Ohne WLAN lädt die App über Mobilfunk weiter, ohne dass du etwas tun musst, und verbindet sich bei Funklöchern von selbst neu. Sobald wieder WLAN da ist, wechselt sie zurück ins WLAN.\n\nDas verbraucht Datenvolumen deines Mobilfunkvertrags. Eine Region hat meist einige hundert Megabyte; die genaue Größe siehst du vor dem Start. Den Schalter kannst du jederzeit umlegen, auch während des Downloads.")
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        findViewById<MaterialButton>(R.id.btnRegionLoad).setOnClickListener { regionLoader.open() }
+        findViewById<MaterialButton>(R.id.btnRegionUpdate).setOnClickListener { regionLoader.update() }
+        findViewById<MaterialButton>(R.id.btnDlPause).setOnClickListener {
+            if (DownloadBus.state == DlState.RUNNING) DownloadBus.pauseRequested = true else regionLoader.resume()
+        }
+        findViewById<MaterialButton>(R.id.btnDlDiscard).setOnClickListener { regionLoader.discard() }
         findViewById<MaterialButton>(R.id.btnMapPick).setOnClickListener {
             try { pickMap.launch(arrayOf("*/*")) } catch (_: Exception) { Toast.makeText(this, "Keine Dateiauswahl verfügbar", Toast.LENGTH_LONG).show() }
         }
@@ -833,6 +903,33 @@ class MainActivity : AppCompatActivity() {
                 }
                 .setNegativeButton("Abbrechen", null)
                 .show()
+        }
+        fun applyKeepScreen(on: Boolean) {
+            if (on) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            else window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        applyKeepScreen(prefs.getBoolean(BridgeService.KEY_KEEP_SCREEN, false))
+        findViewById<MaterialSwitch>(R.id.swKeepScreen).apply {
+            isChecked = prefs.getBoolean(BridgeService.KEY_KEEP_SCREEN, false)
+            setOnCheckedChangeListener { _, on ->
+                prefs.edit().putBoolean(BridgeService.KEY_KEEP_SCREEN, on).apply()
+                applyKeepScreen(on)
+            }
+        }
+        findViewById<View>(R.id.btnInfoKeepScreen).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Stay awake")
+                .setMessage("Der Bildschirm bleibt an, solange diese App vorne offen ist. So siehst du bei einer Testfahrt dauernd Schild, Straße und Tempo.\n\nWenn du eine andere App öffnest (z. B. OSMAnd), gilt wieder die normale Zeit. Die Warnungen laufen im Hintergrund trotzdem weiter.\n\nKostet viel Akku und belastet den Bildschirm: am besten nur mit Ladekabel.")
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        findViewById<MaterialSwitch>(R.id.swCarMode).apply {
+            isChecked = prefs.getBoolean(BridgeService.KEY_CAR_MODE, false)
+            setOnCheckedChangeListener { _, on ->
+                prefs.edit().putBoolean(BridgeService.KEY_CAR_MODE, on).apply()
+                applyConfigIfRunning()
+                if (on) Toast.makeText(this@MainActivity, "Auto-Modus an: GPS jede Sekunde, alle Töne aktiv. Braucht mehr Akku.", Toast.LENGTH_LONG).show()
+            }
         }
         findViewById<MaterialSwitch>(R.id.swOffline).apply {
             isChecked = prefs.getBoolean(BridgeService.KEY_OFFLINE, false)
@@ -893,7 +990,7 @@ class MainActivity : AppCompatActivity() {
 
     private var cacheStatsAt = 0L
     private var cacheStatsBusy = false
-    private var cacheStatsText = "Belegt: –"
+    private var cacheStatsText = "Belegt: wird berechnet …"
 
     /** Belegten Kartenspeicher höchstens alle 15 s im Hintergrund zählen (bei vielen Dateien dauert das etwas). */
     private fun updateCacheUsed() {
@@ -908,7 +1005,10 @@ class MainActivity : AppCompatActivity() {
             val mb = bytes / (1024.0 * 1024.0)
             val txt = "Belegt: " + (if (mb >= 1024) String.format(java.util.Locale.GERMANY, "%.1f GB", mb / 1024) else String.format(java.util.Locale.GERMANY, "%.0f MB", mb)) +
                 ", $n Kacheln"
-            runOnUiThread { cacheStatsText = txt; cacheStatsBusy = false }
+            runOnUiThread {
+                cacheStatsText = txt; cacheStatsBusy = false
+                findViewById<TextView>(R.id.tvCacheUsed)?.text = txt // sofort anzeigen, nicht erst beim nächsten Auffrischen
+            }
         }.start()
     }
 
@@ -935,6 +1035,28 @@ class MainActivity : AppCompatActivity() {
         tv.text = if (granted) "Benachrichtigungen kommen nicht an: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen, dann den Zugriff für diese App aus- und wieder einschalten."
         else "Benachrichtigungszugriff fehlt: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen und den Zugriff erlauben."
         tv.visibility = View.VISIBLE
+    }
+
+    /** Nur die Live-Werte (Tempo, Limit, Straße, Log): läuft jede Sekunde, solange die App offen ist. */
+    private fun refreshLive() {
+        fun plain(t: String) = t.substringAfter(": ", t)
+        tvGps.text = plain(BridgeBus.gps)
+        tvLimit.text = plain(BridgeBus.limit)
+        tvOsm.text = osmStatus(BridgeBus.osm)
+        val limRaw = BridgeBus.limit
+        val limKmh = Regex("(\\d+) km/h").find(limRaw)?.groupValues?.get(1)
+        val tvSignValue = findViewById<TextView>(R.id.tvSignValue)
+        tvSignValue.text = limKmh ?: "–"
+        findViewById<TextView>(R.id.tvSignSource).text = when {
+            limKmh == null -> if (limRaw.contains("unbekannt")) "Unbekannt" else plain(limRaw)
+            limRaw.contains("geschätzt") -> "Geschätzt, nicht aus den Kartendaten"
+            else -> "Aus den Kartendaten (OSM)"
+        }
+        val spd = Regex("Tempo: (\\d+) km/h").find(BridgeBus.gps)?.groupValues?.get(1)
+        findViewById<TextView>(R.id.tvSignStreet).text = "Straße: " + (BridgeBus.street?.takeIf { it.isNotBlank() } ?: "–")
+        findViewById<TextView>(R.id.tvSignSpeed).text = "Tempo: " + (spd?.let { "$it km/h" } ?: "–")
+        findViewById<TextView>(R.id.tvLogHome).text = BridgeBus.lastLinesNewestFirst(3).ifBlank { "–" }
+        tvLog.text = BridgeBus.lastLinesNewestFirst(25)
     }
 
     private fun refresh() {
@@ -999,23 +1121,7 @@ class MainActivity : AppCompatActivity() {
         if (swJust.isChecked != justOn) { justageSyncing = true; swJust.isChecked = justOn; justageSyncing = false }
         val swService = findViewById<MaterialSwitch>(R.id.swService)
         if (swService.isChecked != hudOn) { serviceSyncing = true; swService.isChecked = hudOn; serviceSyncing = false }
-        fun plain(t: String) = t.substringAfter(": ", t)
-        tvGps.text = plain(BridgeBus.gps)
-        tvLimit.text = plain(BridgeBus.limit)
-        tvOsm.text = osmStatus(BridgeBus.osm)
-        val limRaw = BridgeBus.limit
-        val limKmh = Regex("(\\d+) km/h").find(limRaw)?.groupValues?.get(1)
-        val tvSignValue = findViewById<TextView>(R.id.tvSignValue)
-        tvSignValue.text = limKmh ?: "–"
-        findViewById<TextView>(R.id.tvSignSource).text = when {
-            limKmh == null -> if (limRaw.contains("unbekannt")) "Unbekannt" else plain(limRaw)
-            limRaw.contains("geschätzt") -> "Geschätzt, nicht aus den Kartendaten"
-            else -> "Aus den Kartendaten (OSM)"
-        }
-        val spd = Regex("Tempo: (\\d+) km/h").find(BridgeBus.gps)?.groupValues?.get(1)
-        findViewById<TextView>(R.id.tvSignSpeed).text = "Tempo: " + (spd?.let { "$it km/h" } ?: "–")
-        findViewById<TextView>(R.id.tvLogHome).text = BridgeBus.lastLinesNewestFirst(3).ifBlank { "–" }
-        tvLog.text = BridgeBus.lastLinesNewestFirst(25)
+        refreshLive()
     }
 
     // ---------------- Start ----------------
@@ -1115,6 +1221,7 @@ class MainActivity : AppCompatActivity() {
     private val trackTick = object : Runnable {
         override fun run() {
             updateRecUi()
+            refreshLive()
             trackHandler.postDelayed(this, 1000)
         }
     }

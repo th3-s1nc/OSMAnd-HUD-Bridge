@@ -147,6 +147,8 @@ class BridgeService : Service(), HudClient.Listener {
 
     /** Ton bei Blitzern (eigener Schalter, unabhängig vom Ton bei Überschreitung). */
     @Volatile private var cameraSound = false
+    @Volatile private var closing = false // Dienst wird gerade beendet
+    @Volatile private var carMode = false // Auto-Modus: GPS jede Sekunde und alle Töne auch ohne HUD
 
     private fun playBeep(hint: Boolean = false) {
         val b = beeper ?: SpeedBeeper(applicationContext, handler).also { beeper = it }
@@ -162,7 +164,7 @@ class BridgeService : Service(), HudClient.Listener {
         controller.onOverspeed = { playBeep() }
         client.mode = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(prefs.getString(KEY_MODE, null))
         controller.setModeSilently(client.mode)
-        limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext), { kmh, est -> controller.setLimit(kmh, est) }, { controller.setCurrentStreet(it) }, { dist, sound, lim ->
+        limitProvider = io.github.th3s1nc.osmandhudbridge.limit.SpeedLimitProvider(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext), { kmh, est -> controller.setLimit(kmh, est) }, { controller.setCurrentStreet(it); BridgeBus.street = it }, { dist, sound, lim ->
             controller.setCamera(dist, sound, lim)
             if (sound && cameraSound) playBeep()
         }, { _ -> playBeep(true) })
@@ -206,11 +208,12 @@ class BridgeService : Service(), HudClient.Listener {
         io.github.th3s1nc.osmandhudbridge.nav.NoticeBus.listener = { n -> handler.post { onNotice(n) } }
         applyConfig() // startet auch die HUD-Verbindung, falls gewünscht
         if (stopping) return
-        applyGpsMode(gpsPolicy.mode(SystemClock.elapsedRealtime(), client.isReady))
+        applyGpsMode(gpsPolicy.mode(SystemClock.elapsedRealtime(), client.isReady || carMode))
         handler.postDelayed(ticker, 1000)
     }
 
     override fun onDestroy() {
+        closing = true // ab jetzt keine Meldung mehr anzeigen (sonst bleibt nach dem Beenden eine leere zurück)
         if (started) {
             handler.removeCallbacksAndMessages(null)
             try { unregisterReceiver(btReceiver) } catch (_: Exception) {}
@@ -234,6 +237,7 @@ class BridgeService : Service(), HudClient.Listener {
         BridgeBus.hud = "HUD: –"
         BridgeBus.gps = "GPS: –"
         BridgeBus.osm = "OSMAnd: –"
+        try { getSystemService(NotificationManager::class.java)?.cancel(NOTIF_ID) } catch (_: Exception) {}
         super.onDestroy()
     }
 
@@ -241,7 +245,7 @@ class BridgeService : Service(), HudClient.Listener {
         override fun run() {
             if (checkIdle() || checkSeason()) return
             controller.tick()
-            applyGpsMode(gpsPolicy.mode(SystemClock.elapsedRealtime(), client.isReady || TrackRecorder.active))
+            applyGpsMode(gpsPolicy.mode(SystemClock.elapsedRealtime(), client.isReady || TrackRecorder.active || carMode))
             if (notifRecording != TrackRecorder.active) {
                 notifRecording = TrackRecorder.active
                 if (notifRecording) {
@@ -263,7 +267,7 @@ class BridgeService : Service(), HudClient.Listener {
     /** Beendet den Dienst, wenn das HUD lange nicht verbunden war. Gibt true zurück, wenn beendet wurde. */
     private fun checkIdle(): Boolean {
         // Nur wenn ein HUD gewünscht ist und nicht gefunden wird, endet der Dienst nach einer Weile
-        if (client.isReady || TrackRecorder.active || !hudActive) { idleSince = 0L; return false }
+        if (client.isReady || TrackRecorder.active || carMode || !hudActive) { idleSince = 0L; return false }
         val now = SystemClock.elapsedRealtime()
         if (idleSince == 0L) { idleSince = now; return false }
         if (now - idleSince < IDLE_STOP_MS) return false
@@ -328,6 +332,7 @@ class BridgeService : Service(), HudClient.Listener {
     // ---------------- HudClient.Listener ----------------
 
     override fun onStateChanged(state: HudClient.State, detail: String) {
+        if (closing) return
         getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, buildNotification())
     }
 
@@ -521,6 +526,8 @@ class BridgeService : Service(), HudClient.Listener {
         controller.setMode(newMode)
         if (slotsChanged) controller.slotsChanged()
         controller.setWarn(sp.getBoolean(KEY_WARN, true), sp.getInt(KEY_WARN_TOL, DEFAULT_WARN_TOL))
+        carMode = sp.getBoolean(KEY_CAR_MODE, false)
+        controller.carMode = carMode
         controller.acousticWarn = sp.getBoolean(KEY_WARN_SOUND, false)
         cameraSound = sp.getBoolean(KEY_CAMERA_SOUND, sp.getBoolean(KEY_WARN_SOUND, false))
         limitProvider.curveLevel = if (sp.getBoolean(KEY_CURVE, false)) sp.getInt(KEY_CURVE_LEVEL, 1).coerceIn(0, 2) else -1
@@ -627,7 +634,7 @@ class BridgeService : Service(), HudClient.Listener {
             .setContentTitle("OSMAnd HUD Bridge")
             .setContentText(
                 if (TrackRecorder.active) "Aufzeichnung läuft" + (if (hudActive) " · " + BridgeBus.hud else "")
-                else if (hudActive) BridgeBus.hud else "Ohne HUD: wartet auf die Verbindung, Standort im Sparmodus"
+                else if (hudActive) BridgeBus.hud else if (carMode) "Auto-Modus: Tempolimit, Straße und Töne ohne HUD" else "Läuft ohne HUD: Tempolimit und Straße, GPS im Sparmodus"
             )
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -682,6 +689,17 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_SEASON_FROM = "season_from" // Monat 1..12
         const val KEY_SEASON_TO = "season_to"
         const val KEY_HUD_ON = "hud_on" // Schalter "HUD verbinden" (nur die Bluetooth-Verbindung)
+        const val KEY_REGION_ID = "region_id" // zuletzt geladene Region (für "Aktualisieren")
+        const val KEY_REGION_NAME = "region_name"
+        const val KEY_REGION_URL = "region_url"
+        const val KEY_REGION_DATE = "region_date"
+        const val KEY_DL_MOBILE = "dl_mobile" // Schalter "Mobile Daten" beim Region-Download
+        const val KEY_DL_URL = "dl_url" // pausierter Download
+        const val KEY_DL_ID = "dl_id"
+        const val KEY_DL_NAME = "dl_name"
+        const val KEY_DL_TOTAL = "dl_total"
+        const val KEY_KEEP_SCREEN = "keep_screen" // Display bleibt an, solange die App vorne ist
+        const val KEY_CAR_MODE = "car_mode" // Auto-Modus (Testfahrt ohne HUD)
         const val KEY_WARN_SOUND = "warn_sound" // Warnton bei Überschreitung
         const val KEY_CURVE = "hint_curve" // Ton vor sehr scharfen Kurven
         const val KEY_CURVE_LEVEL = "hint_curve_level" // 0 = wenig, 1 = normal, 2 = viel
@@ -689,6 +707,7 @@ class BridgeService : Service(), HudClient.Listener {
         const val KEY_HINT_ZEBRA = "hint_zebra" // Ton vor Zebrastreifen
         const val KEY_HINT_CALMING = "hint_calming" // Ton vor Verkehrsberuhigung
         const val KEY_CAMERA_SOUND = "camera_sound" // Ton bei Blitzern (ohne eigenen Wert: wie KEY_WARN_SOUND)
+        const val KEY_CAM_OPEN = "cam_card_open" // Karte Blitzer aufgeklappt (Standard: zu)
         const val KEY_CAMERA = "camera_warn" // Blitzer-Warnung (aus OSM-Daten), standardmäßig aus
         const val KEY_CAMERA_LEAD = "camera_lead" // 0 Kurz, 1 Normal, 2 Lang
         const val KEY_CAM_RED = "cam_red" // eigene Liste: Ampelblitzer warnen

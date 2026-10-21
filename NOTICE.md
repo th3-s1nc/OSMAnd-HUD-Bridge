@@ -17,6 +17,7 @@ Es sind keine Programmteile, Grafiken, Schriften oder Texte der Hersteller-App e
 | OSMAnd-Schnittstelle (`app/src/main/aidl`, `app/src/main/java/net/osmand`) | von OSMAnd. Laut OSMAnd-Dokumentation ist die AIDL-API "No License issues - available for all possible purposes". Das Full-Library-SDK (GPLv3) wird nicht verwendet | Nicht von der MIT-Lizenz dieses Projekts erfasst. Die Dateien tragen keinen eigenen Lizenzkopf, die Aussage steht in der OSMAnd-Doku (osmand.net, "OSMAnd API / SDK"). OSMAnd-Code (GPLv3) und -Grafiken (CC BY-NC-ND) sind nicht enthalten |
 | Kartendaten (Straßennamen, Tempolimits) | © OpenStreetMap-Mitwirkende, ODbL (openstreetmap.org/copyright) | Hinweis in der App (Reiter Info) |
 | Overpass API | öffentliche Server, moderate Nutzung | für wenige Nutzer gedacht |
+| Importierte Kartendateien (.osm.pbf, z. B. Geofabrik) | © OpenStreetMap-Mitwirkende, ODbL | werden vom Nutzer geladen (auch über "Region laden" in der App, nur auf Tipp), nicht mitgeliefert. Blitzer-Listen (z. B. SCDB) sind nicht enthalten und gehören nicht zum Projekt |
 | AndroidX, Material Components | Apache License 2.0 | Abhängigkeiten, werden beim Bauen geladen |
 
 ## Nennung der Produktnamen

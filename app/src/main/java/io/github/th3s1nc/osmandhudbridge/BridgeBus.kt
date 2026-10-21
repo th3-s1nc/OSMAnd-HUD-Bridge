@@ -63,6 +63,8 @@ object BridgeBus {
     @Volatile var gps = "GPS: –"
     @Volatile var osm = "OSMAnd: –"
     @Volatile var limit = "Limit: –"
+    /** Zuletzt erkannter Straßenname (null = unbekannt). */
+    @Volatile var street: String? = null
     /** Blitzer in den geladenen Kacheln (nur Test der Datenqualität). */
     @Volatile var cameras = "–"
     /** Blitzer in allen gespeicherten Kacheln (Hintergrundzählung der Oberfläche). */

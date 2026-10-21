@@ -16,9 +16,9 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 - Optional: audible warning (triple beep, once per overspeed event) played by the phone, e.g. to a helmet intercom.
 - **Speed camera warning** (off; a note appears when switching on; not allowed for drivers in Germany and some other countries): uses OpenStreetMap and an own GPX list (e.g. SCDB, not included). Separate switch for the sound; the HUD briefly shows the camera symbol and distance.
 - **Hint tones** (each switchable, one single tone): level crossings, pedestrian crossings, traffic calming and very sharp bends.
-- **Import road data:** load a map file (.osm.pbf, e.g. from Geofabrik) once. Speed limits, zones, town signs and street names are then stored on the phone and work without internet. An **Offline data** switch is available. Without an import the app loads data while riding (current tile and the next one) from an Overpass server and keeps it for 30 days.
+- **Import road data:** load a region directly in the app from the Geofabrik directory (with pause and resume; the **Mobile data** switch lets it continue over mobile data, Wi-Fi always has priority) or read a map file (.osm.pbf) yourself, once. Speed limits, zones, town signs and street names are then stored on the phone and work without internet. An **Offline data** switch is available. Without an import the app loads data while riding (current tile and the next one) from an Overpass server and keeps it for 30 days.
 - Runs as a foreground service, works with the screen off, reconnects automatically, shows nothing rather than something wrong.
-- The service also runs without a connected HUD (GPS, speed limit, street name, sounds; storage limit adjustable). With the HUD the GPS is polled every second, otherwise less often.
+- The service also runs without a connected HUD (speed limit, street name; GPS in power-saving mode). With the HUD the GPS is polled every second. The **car mode** (Tools tab) does the same without a HUD and plays all sounds, e.g. for test drives in a car. The **Stay awake** switch (Speed limit tab, card "Aktuell") keeps the screen on.
 - **Season rider:** outside the season the app rests and uses no energy. The season overview in "Meine Fahrten" shows rides, distance and ride time.
 - The Home tab shows live speed limit and street name. The log shows the newest entry first, and a switch makes it more detailed.
 - Optional: phone battery warning on the HUD. The Tools tab has an element test for HUD display codes.
@@ -43,7 +43,7 @@ Open the folder in Android Studio (JDK 17, Gradle 8.13 / AGP 8.9.2), or:
 ./gradlew assembleDebug
 ```
 
-The protocol and parser logic, speed-limit matching, GPS interval, season logic, overspeed alarm, ride recording and ride analysis have unit tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `BatteryWarnTest`, `CameraWarnTest`, `CameraImportTest`, `PbfImportTest`, `PointWarnTest`, `CurveWarnTest`, `SeasonSummaryTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`; they run without the Android SDK as plain Kotlin tests); the BLE, service and UI code is only covered by manual testing.
+The protocol and parser logic, speed-limit matching, GPS interval, season logic, overspeed alarm, ride recording and ride analysis have unit tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `BatteryWarnTest`, `CameraWarnTest`, `CameraImportTest`, `PbfImportTest`, `PointWarnTest`, `CurveWarnTest`, `RegionIndexTest`, `SeasonSummaryTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`; they run without the Android SDK as plain Kotlin tests); the BLE, service and UI code is only covered by manual testing.
 
 ## Setup
 1. Switch the HUD on and pair it in Android's Bluetooth settings.
@@ -58,7 +58,7 @@ The protocol and parser logic, speed-limit matching, GPS interval, season logic,
 
 ## Privacy
 - Notifications from OSMAnd, WhatsApp and phone calls, and the music track (artist, title), are read only to show them on the HUD. Nothing is stored or sent anywhere.
-- Without imported data, the approximate position is sent to an Overpass server (OpenStreetMap) for street names and speed limits. With the *Offline data* switch (Speed limit tab) nothing is sent.
+- Without imported data, the approximate position is sent to an Overpass server (OpenStreetMap) for street names and speed limits. With the *Offline data* switch (Speed limit tab) nothing is sent. Loading a region (download from Geofabrik, only when you tap it) sends only the usual request, without your location.
 - The log stays on the device. It may contain caller or sender names; check it before sharing.
 
 ## Protocol

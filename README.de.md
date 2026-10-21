@@ -16,9 +16,9 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 - Optional: akustische Warnung (dreifaches "Dü", einmal pro Überschreitung) über das Handy, z. B. zur Intercom.
 - **Blitzer-Warnung** (aus, mit Hinweis beim Einschalten; in Deutschland und einigen Ländern für Fahrer nicht erlaubt): aus OpenStreetMap und aus einer eigenen GPX-Liste (z. B. SCDB, nicht enthalten). Eigener Schalter für den Ton, das HUD zeigt kurz Blitzer-Symbol und Entfernung.
 - **Hinweistöne** (einzeln schaltbar, ein einzelner Ton): Bahnübergänge, Zebrastreifen, Verkehrsberuhigung und sehr scharfe Kurven.
-- **Straßendaten importieren:** Eine Kartendatei (.osm.pbf, z. B. von Geofabrik) einmal einlesen. Tempolimits, Zonen, Ortsschilder und Straßennamen liegen dann auf dem Handy, auch ohne Internet. Dazu ein Schalter "Offline-Daten". Ohne Import lädt die App die Daten unterwegs (aktuelle Kachel und die nächste) von einem Overpass-Server und speichert sie 30 Tage.
+- **Straßendaten importieren:** Eine Region direkt in der App aus dem Verzeichnis von Geofabrik laden (mit Pausieren und Fortsetzen; der Schalter **Mobile Daten** lässt den Download auch im Mobilfunk weiterlaufen, WLAN hat immer Vorrang) oder eine Kartendatei (.osm.pbf) selbst einlesen. Tempolimits, Zonen, Ortsschilder und Straßennamen liegen dann auf dem Handy, auch ohne Internet. Dazu ein Schalter "Offline-Daten". Ohne Import lädt die App die Daten unterwegs (aktuelle Kachel und die nächste) von einem Overpass-Server und speichert sie 30 Tage.
 - Läuft als Vordergrunddienst auch bei ausgeschaltetem Display, verbindet sich selbst neu und zeigt lieber nichts als etwas Falsches.
-- Der Dienst läuft auch ohne verbundenes HUD (GPS, Tempolimit, Straßenname, Töne; Datenspeicher einstellbar). Mit HUD fragt die App das GPS jede Sekunde ab, sonst seltener.
+- Der Dienst läuft auch ohne verbundenes HUD (Tempolimit, Straßenname; GPS dann im Sparmodus). Mit HUD fragt die App das GPS jede Sekunde ab. Der **Auto-Modus** (Werkzeuge) macht das auch ohne HUD und spielt alle Töne, z. B. für Testfahrten im Auto. Der Schalter **Stay awake** (Tab Tempolimit, Karte "Aktuell") hält das Display an.
 - **Saisonfahrer:** Außerhalb der Saison ruht die App und verbraucht keine Energie. Die Saison-Übersicht in "Meine Fahrten" zeigt Fahrten, Strecke und Fahrzeit.
 - Der Reiter Übersicht zeigt live Tempolimit und Straßenname. Das Protokoll steht mit der neuesten Meldung oben, ein Schalter macht es ausführlicher.
 - Optional: Handy-Akku-Warnung am HUD. Im Werkzeuge-Reiter gibt es einen Element-Test für HUD-Anzeigecodes.
@@ -43,7 +43,7 @@ Ordner in Android Studio öffnen (JDK 17, Gradle 8.13 / AGP 8.9.2) oder:
 ./gradlew assembleDebug
 ```
 
-Protokoll, Parser und die Logik für Tempolimit, GPS-Takt, Saison, Überschreitungs-Warnung, Fahrtaufzeichnung und Fahrtauswertung haben Unit-Tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `BatteryWarnTest`, `CameraWarnTest`, `CameraImportTest`, `PbfImportTest`, `PointWarnTest`, `CurveWarnTest`, `SeasonSummaryTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`). Sie laufen ohne Android-SDK als reine Kotlin-Tests. BLE, Dienst und Oberfläche sind nur manuell getestet.
+Protokoll, Parser und die Logik für Tempolimit, GPS-Takt, Saison, Überschreitungs-Warnung, Fahrtaufzeichnung und Fahrtauswertung haben Unit-Tests (`HudProtocolTest`, `OsmAndNotificationParserTest`, `SpeedLimitMatcherTest`, `SpeedLimitLogicTest`, `GpsPolicyTest`, `SeasonPlanTest`, `NavExtrapolationTest`, `OverspeedAlarmTest`, `BatteryWarnTest`, `CameraWarnTest`, `CameraImportTest`, `PbfImportTest`, `PointWarnTest`, `CurveWarnTest`, `RegionIndexTest`, `SeasonSummaryTest`, `TripTrackerTest`, `TrackSessionTest`, `TrackExtrasTest`, `RideDetailTest`). Sie laufen ohne Android-SDK als reine Kotlin-Tests. BLE, Dienst und Oberfläche sind nur manuell getestet.
 
 ## Einrichten
 1. HUD einschalten und in den Android-Bluetooth-Einstellungen koppeln.
@@ -58,7 +58,7 @@ Protokoll, Parser und die Logik für Tempolimit, GPS-Takt, Saison, Überschreitu
 
 ## Datenschutz
 - Benachrichtigungen von OSMAnd, WhatsApp und Anrufen sowie der Musiktitel (Interpret, Titel) werden nur gelesen, um sie am HUD anzuzeigen. Nichts wird gespeichert oder gesendet.
-- Ohne importierte Daten wird für Straßennamen und Tempolimits die ungefähre Position an einen Overpass-Server (OpenStreetMap) gesendet. Mit dem Schalter *Offline-Daten* (Reiter Tempolimit) wird nichts gesendet.
+- Ohne importierte Daten wird für Straßennamen und Tempolimits die ungefähre Position an einen Overpass-Server (OpenStreetMap) gesendet. Mit dem Schalter *Offline-Daten* (Reiter Tempolimit) wird nichts gesendet. Das Laden einer Region (Download von Geofabrik, nur auf deinen Tipp) sendet nur die übliche Anfrage ohne Standort.
 - Das Protokoll liegt nur auf dem Gerät. Es kann Namen von Anrufern oder Absendern enthalten, vor dem Teilen prüfen.
 
 ## Protokoll

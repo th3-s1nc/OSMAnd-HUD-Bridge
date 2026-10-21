@@ -35,6 +35,9 @@ class HudController(private val client: HudClient) {
 
     /** Warnton bei Tempoüberschreitung (zusätzlich zur Anzeige am HUD). */
     var acousticWarn = false
+
+    /** Auto-Modus: der Warnton gilt auch ohne verbundenes HUD. */
+    var carMode = false
     var onOverspeed: (() -> Unit)? = null
     private val alarm = io.github.th3s1nc.osmandhudbridge.limit.OverspeedAlarm()
 
@@ -506,7 +509,7 @@ class HudController(private val client: HudClient) {
         if (msgClearAt != 0L && now > msgClearAt) showNotice(false, null, true)
         musicStep(now)
         // Warnton: nur mit HUD (dann kommt das Tempo jede Sekunde), nur bei echtem Limit aus den Kartendaten
-        if (acousticWarn && want.warnEnabled && !want.limitEstimated && client.isReady) {
+        if (acousticWarn && want.warnEnabled && !want.limitEstimated && (client.isReady || carMode)) {
             if (alarm.update(want.speedKmh, want.speedLimitKmh, want.warnToleranceKmh, now)) {
                 BridgeBus.log("Tempo ${want.speedKmh.toInt()} bei Limit ${want.speedLimitKmh}: Warnton")
                 onOverspeed?.invoke()
