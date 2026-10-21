@@ -12,6 +12,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /** Eine gespeicherte Fahrt (Kennzahlen). Die GPX-Datei liegt privat in der App und, wenn möglich, in Download/GPX-Tracking. */
 class Ride(
@@ -74,7 +75,7 @@ object RideStore {
                 }
             }
         } catch (e: Exception) {
-            BridgeBus.log("Fahrtpunkte nicht lesbar (${f.name}): ${e.message}")
+            BridgeBus.log(Tx.t("Fahrtpunkte nicht lesbar (${f.name}): ${e.message}", "Ride points not readable (${f.name}): ${e.message}"))
         }
         return out
     }
@@ -95,13 +96,13 @@ object RideStore {
         try {
             gpxFile(ctx, id).writeText(gpx)
         } catch (e: Exception) {
-            BridgeBus.log("Fahrt speichern gescheitert: ${e.message}")
+            BridgeBus.log(Tx.t("Fahrt speichern gescheitert: ${e.message}", "Saving the ride failed: ${e.message}"))
             return null
         }
         val base = "${RideFormat.fileSafe(name)}_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date(st.startMs))}"
         val csv = CsvWriter.write(points)
-        try { File(dir(ctx), "$id.pts").writeText(points.joinToString("") { line(it) }) } catch (e: Exception) { BridgeBus.log("Punkte speichern gescheitert: ${e.message}") }
-        try { csvFile(ctx, id).writeText(csv) } catch (e: Exception) { BridgeBus.log("CSV speichern gescheitert: ${e.message}") }
+        try { File(dir(ctx), "$id.pts").writeText(points.joinToString("") { line(it) }) } catch (e: Exception) { BridgeBus.log(Tx.t("Punkte speichern gescheitert: ${e.message}", "Saving the points failed: ${e.message}")) }
+        try { csvFile(ctx, id).writeText(csv) } catch (e: Exception) { BridgeBus.log(Tx.t("CSV speichern gescheitert: ${e.message}", "Saving the CSV failed: ${e.message}")) }
         val pub = publish(ctx, "$base.gpx", "application/gpx+xml", gpx)
         val cpub = publish(ctx, "$base.csv", "text/csv", csv)
         val ride = Ride(id, name, st, pub, cpub)
@@ -117,10 +118,10 @@ object RideStore {
                     .toString()
             )
         } catch (e: Exception) {
-            BridgeBus.log("Fahrt-Kennzahlen speichern gescheitert: ${e.message}")
+            BridgeBus.log(Tx.t("Fahrt-Kennzahlen speichern gescheitert: ${e.message}", "Saving the ride figures failed: ${e.message}"))
         }
         if (clearUnfinished) discardUnfinished(ctx)
-        BridgeBus.log("Fahrt gespeichert: $name, ${RideFormat.distance(st.distanceM)}, ${st.points} Punkte" + if (pub != null) ", Kopie in Download/GPX-Tracking" else "")
+        BridgeBus.log(Tx.t("Fahrt gespeichert: $name, ${RideFormat.distance(st.distanceM)}, ${st.points} Punkte", "Ride saved: $name, ${RideFormat.distance(st.distanceM)}, ${st.points} points") + if (pub != null) Tx.t(", Kopie in Download/GPX-Tracking", ", copy in Download/GPX-Tracking") else "")
         return ride
     }
 
@@ -137,7 +138,7 @@ object RideStore {
             ctx.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) } ?: return null
             uri.toString()
         } catch (e: Exception) {
-            BridgeBus.log("Kopie in Downloads gescheitert: ${e.message}")
+            BridgeBus.log(Tx.t("Kopie in Downloads gescheitert: ${e.message}", "Copy to Downloads failed: ${e.message}"))
             null
         }
     }
@@ -151,7 +152,7 @@ object RideStore {
         try {
             f.writeText(JSONObject(f.readText()).put("name", name).toString())
         } catch (e: Exception) {
-            BridgeBus.log("Umbenennen gescheitert: ${e.message}")
+            BridgeBus.log(Tx.t("Umbenennen gescheitert: ${e.message}", "Renaming failed: ${e.message}"))
         }
     }
 
@@ -173,7 +174,7 @@ object RideStore {
                     if (j.isNull("curi")) null else j.optString("curi", "").ifEmpty { null }
                 )
             } catch (e: Exception) {
-                BridgeBus.log("Fahrt nicht lesbar (${f.name}): ${e.message}")
+                BridgeBus.log(Tx.t("Fahrt nicht lesbar (${f.name}): ${e.message}", "Ride not readable (${f.name}): ${e.message}"))
             }
         }
         return out.sortedByDescending { it.stats.startMs }
@@ -187,7 +188,7 @@ object RideStore {
         File(dir(ctx), "${ride.id}.pts").delete()
         for (u in listOfNotNull(ride.publicUri, ride.csvUri)) {
             try { ctx.contentResolver.delete(Uri.parse(u), null, null) } catch (e: Exception) {
-                BridgeBus.log("Kopie in Downloads nicht gelöscht: ${e.message}")
+                BridgeBus.log(Tx.t("Kopie in Downloads nicht gelöscht: ${e.message}", "Copy in Downloads not deleted: ${e.message}"))
             }
         }
     }

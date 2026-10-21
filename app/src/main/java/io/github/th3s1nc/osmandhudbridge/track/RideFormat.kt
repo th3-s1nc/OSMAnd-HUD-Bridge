@@ -1,5 +1,6 @@
 package io.github.th3s1nc.osmandhudbridge.track
 
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 import java.util.Locale
 
 /** Texte für Zeit und Strecke (Oberfläche und Dateinamen). */
@@ -8,11 +9,11 @@ object RideFormat {
         val s = (ms / 1000).coerceAtLeast(0)
         val h = s / 3600
         val m = (s % 3600) / 60
-        return if (h > 0) String.format(Locale.GERMANY, "%d:%02d h", h, m) else String.format(Locale.GERMANY, "%d min", m)
+        return if (h > 0) String.format(Tx.loc(), "%d:%02d h", h, m) else String.format(Tx.loc(), "%d min", m)
     }
 
     fun distance(m: Int): String =
-        if (m < 1000) "$m m" else String.format(Locale.GERMANY, "%.1f km", m / 1000.0)
+        if (m < 1000) "$m m" else String.format(Tx.loc(), "%.1f km", m / 1000.0)
 
     /** Dateiname ohne Endung: nur Buchstaben, Ziffern, Bindestrich und Unterstrich. */
     fun fileSafe(name: String): String {

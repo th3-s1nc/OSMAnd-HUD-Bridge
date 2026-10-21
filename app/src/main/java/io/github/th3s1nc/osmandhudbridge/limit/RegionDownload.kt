@@ -8,9 +8,9 @@ object RegionDownload {
 
     /** "185 MB" oder "1,2 GB". */
     fun sizeText(bytes: Long): String = when {
-        bytes <= 0 -> "unbekannt"
-        bytes < 1024 * MB -> String.format(Locale.GERMANY, "%,d MB", Math.max(1L, Math.round(bytes / MB.toDouble())))
-        else -> String.format(Locale.GERMANY, "%.1f GB", bytes / (1024.0 * MB))
+        bytes <= 0 -> Tx.t("unbekannt", "unknown")
+        bytes < 1024 * MB -> String.format(Tx.loc(), "%,d MB", Math.max(1L, Math.round(bytes / MB.toDouble())))
+        else -> String.format(Tx.loc(), "%.1f GB", bytes / (1024.0 * MB))
     }
 
     /** Anteil 0..1; bei unbekannter Gesamtgröße 0. */

@@ -6,6 +6,7 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import io.github.th3s1nc.osmandhudbridge.BridgeBus
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /** Hört während einer Aufnahme Barometer, Drehsensor und Schwerkraft ab (nur was gewünscht ist, spart Akku). */
 class SensorTracker(ctx: Context) : SensorEventListener {
@@ -27,7 +28,7 @@ class SensorTracker(ctx: Context) : SensorEventListener {
         if (baro) {
             val s = m.getDefaultSensor(Sensor.TYPE_PRESSURE)
             if (s != null) m.registerListener(this, s, SensorManager.SENSOR_DELAY_NORMAL)
-            else BridgeBus.log("Kein Barometer im Handy: Höhe kommt aus dem GPS")
+            else BridgeBus.log(Tx.t("Kein Barometer im Handy: Höhe kommt aus dem GPS", "No barometer in the phone: altitude comes from GPS"))
         }
         if (lean) {
             val gyro = m.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
@@ -36,7 +37,7 @@ class SensorTracker(ctx: Context) : SensorEventListener {
                 m.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME)
                 m.registerListener(this, grav, SensorManager.SENSOR_DELAY_GAME)
             } else {
-                BridgeBus.log("Drehsensor fehlt: keine Schräglage")
+                BridgeBus.log(Tx.t("Drehsensor fehlt: keine Schräglage", "Gyro sensor missing: no lean angle"))
             }
         }
     }

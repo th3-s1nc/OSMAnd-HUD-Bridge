@@ -13,6 +13,7 @@ import io.github.th3s1nc.osmandhudbridge.protocol.LaneRecommendation
 import io.github.th3s1nc.osmandhudbridge.protocol.NavCommand
 import io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode
 import java.util.Calendar
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Hält den gewünschten Anzeigezustand und sendet nur geänderte Felder ans HUD.
@@ -58,7 +59,7 @@ class HudController(private val client: HudClient) {
         if (m == mode) return
         mode = m
         client.mode = m
-        BridgeBus.log("Anzeigemodus: ${m.title}")
+        BridgeBus.log(Tx.t("Anzeigemodus: ${m.title}", "Display mode: ${m.title}"))
         if (!client.isReady || justage) return // im Justage-Modus gilt der neue Modus erst nach dem Beenden
         if (client.send(HudProtocol.switchMode(m))) {
             sent = emptyMap()
@@ -66,7 +67,7 @@ class HudController(private val client: HudClient) {
                 flush()
         } else {
             // Warteschlange voll: sauber neu aufbauen lassen
-            BridgeBus.log("Moduswechsel zurückgestellt")
+            BridgeBus.log(Tx.t("Moduswechsel zurückgestellt", "Mode change postponed"))
         }
     }
 
@@ -130,7 +131,7 @@ class HudController(private val client: HudClient) {
         testBlinkOn = true
         testLastAct = SystemClock.elapsedRealtime()
         testBlinkEnd = testLastAct + io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.SHOW_SECONDS * 1000L
-        BridgeBus.log("Element-Test: " + (testScreenOverride?.let { "Bildschirm $it" } ?: mode.title) + ", Code $code")
+        BridgeBus.log(Tx.t("Element-Test: ", "Element test: ") + (testScreenOverride?.let { Tx.t("Bildschirm $it", "Screen $it") } ?: mode.title) + Tx.t(", Code $code", ", code $code"))
         testHandler.postDelayed(blinkStep, io.github.th3s1nc.osmandhudbridge.protocol.ElementTest.BLINK_MS)
         return true
     }
@@ -178,7 +179,7 @@ class HudController(private val client: HudClient) {
         if (step == brightnessStep) return
         brightnessStep = step
         client.brightnessStep = step
-        BridgeBus.log("Helligkeit: " + if (step < 0) "automatisch" else listOf("dunkel", "mittel", "hell")[step.coerceIn(0, 2)])
+        BridgeBus.log(Tx.t("Helligkeit: ", "Brightness: ") + if (step < 0) Tx.t("automatisch", "automatic") else listOf(Tx.t("dunkel", "dark"), Tx.t("mittel", "medium"), Tx.t("hell", "bright"))[step.coerceIn(0, 2)])
         if (client.isReady) client.send(listOf(HudProtocol.brightness(step)))
     }
 
@@ -189,11 +190,11 @@ class HudController(private val client: HudClient) {
         if (on) {
             if (!client.send(listOf(HudProtocol.enterJustage()))) return false
             justage = true
-            BridgeBus.log("Justage-Modus ein")
+            BridgeBus.log(Tx.t("Justage-Modus ein", "Alignment mode on"))
         } else {
             if (!client.send(HudProtocol.leaveJustage(mode))) return false
             justage = false
-            BridgeBus.log("Justage-Modus aus")
+            BridgeBus.log(Tx.t("Justage-Modus aus", "Alignment mode off"))
             sent = emptyMap()
             routeShown = null
             flush()
@@ -261,7 +262,7 @@ class HudController(private val client: HudClient) {
         if (client.send(listOf(HudProtocol.textSlots()))) {
             sent = emptyMap()
             flush()
-        } else BridgeBus.log("Zeilenwahl zurückgestellt")
+        } else BridgeBus.log(Tx.t("Zeilenwahl zurückgestellt", "Line selection postponed"))
     }
 
     /** Aktuelles Tempolimit für die Aufzeichnung: 0, wenn unbekannt oder nur geschätzt. */
@@ -297,7 +298,7 @@ class HudController(private val client: HudClient) {
             if (client.send(HudProtocol.dangerOn())) {
                 dangerActive = true
                 dangerHandler.postDelayed(dangerEnd, io.github.th3s1nc.osmandhudbridge.limit.CameraWarn.DANGER_SHOW_MS)
-                BridgeBus.log("Blitzer: Gefahren-Bildschirm")
+                BridgeBus.log(Tx.t("Blitzer: Gefahren-Bildschirm", "Speed camera: danger screen"))
             }
         }
     }
@@ -322,7 +323,7 @@ class HudController(private val client: HudClient) {
         if (want.command == NavCommand.GOAL && navDeadline != 0L && now < navDeadline) return
         val prev = refMeters
         if (refAt != 0L && now - refAt > 10_000L && meters != null)
-            BridgeBus.log("OSMAnd war ${(now - refAt) / 1000} s still")
+            BridgeBus.log(Tx.t("OSMAnd war ${(now - refAt) / 1000} s still", "OSMAnd was silent for ${(now - refAt) / 1000} s"))
         if (extrapolate && meters != null && command != null) {
             if (prev != null && command == refCommand) {
                 val dt = (now - refAt) / 1000f
@@ -362,7 +363,7 @@ class HudController(private val client: HudClient) {
      */
     fun showNotice(call: Boolean, name: String?, clear: Boolean) {
         if (!client.isReady) {
-            if (!clear) BridgeBus.log("Meldung verworfen: HUD nicht verbunden")
+            if (!clear) BridgeBus.log(Tx.t("Meldung verworfen: HUD nicht verbunden", "Message discarded: HUD not connected"))
             return
         }
         val field = HudProtocol.F_CALL_EVENT
@@ -372,7 +373,7 @@ class HudController(private val client: HudClient) {
             return
         }
         if (!mode.supportsEvents) {
-            BridgeBus.log("Meldung nicht angezeigt: Modus ${mode.title} hat keinen Platz dafür (nur Explorer/City)")
+            BridgeBus.log(Tx.t("Meldung nicht angezeigt: Modus ${mode.title} hat keinen Platz dafür (nur Explorer/City)", "Message not shown: mode ${mode.title} has no room for it (Explorer/City only)"))
             return
         }
         if (!call && callActive) return // laufender Anruf hat Vorrang
@@ -381,7 +382,7 @@ class HudController(private val client: HudClient) {
         client.send(listOf(HudMessage(HudProtocol.eventField(field, 1, name, hideS))))
         val until = SystemClock.elapsedRealtime() + hideS * 1000L
         if (call) { callActive = true; callClearAt = until } else msgClearAt = until
-        BridgeBus.log(if (call) "HUD: Anruf angezeigt" else "HUD: Nachricht angezeigt")
+        BridgeBus.log(if (call) Tx.t("HUD: Anruf angezeigt", "HUD: call shown") else Tx.t("HUD: Nachricht angezeigt", "HUD: message shown"))
     }
 
     /**
@@ -392,14 +393,14 @@ class HudController(private val client: HudClient) {
     fun showMusic(artist: String?, title: String) {
         if (!client.isReady) return
         if (!mode.supportsEvents) {
-            BridgeBus.log("Titel nicht angezeigt: Modus ${mode.title} hat keinen Platz dafür (nur Explorer/City)")
+            BridgeBus.log(Tx.t("Titel nicht angezeigt: Modus ${mode.title} hat keinen Platz dafür (nur Explorer/City)", "Title not shown: mode ${mode.title} has no room for it (Explorer/City only)"))
             return
         }
         if (callActive) return
         musicArtist = HudProtocol.cleanAscii(artist ?: "").take(MUSIC_MAX_CHARS)
         musicTitle = HudProtocol.cleanAscii(title).take(MUSIC_MAX_CHARS)
         if (musicArtist.isEmpty() && musicTitle.isEmpty()) return // nur Zeichen, die das HUD nicht darstellt
-        BridgeBus.log("HUD: Titel angezeigt (Interpret: $musicArtist, Titel: $musicTitle)")
+        BridgeBus.log(Tx.t("HUD: Titel angezeigt (Interpret: $musicArtist, Titel: $musicTitle)", "HUD: title shown (artist: $musicArtist, title: $musicTitle)"))
         if (musicArtist.isNotEmpty()) {
             sendMusicText(musicArtist)
             musicPhase = 2
@@ -500,7 +501,7 @@ class HudController(private val client: HudClient) {
             if (d != want.partDistanceM) want = want.copy(partDistanceM = d)
         }
         if (navDeadline != 0L && now > navDeadline) {
-            BridgeBus.log("Navigationsdaten veraltet, HUD-Anzeige geleert")
+            BridgeBus.log(Tx.t("Navigationsdaten veraltet, HUD-Anzeige geleert", "Navigation data outdated, HUD display cleared"))
             navDeadline = 0L
             refMeters = null; rate = 0f
             want = want.copy(partDistanceM = null, command = null, roundaboutExit = null)
@@ -511,7 +512,7 @@ class HudController(private val client: HudClient) {
         // Warnton: nur mit HUD (dann kommt das Tempo jede Sekunde), nur bei echtem Limit aus den Kartendaten
         if (acousticWarn && want.warnEnabled && !want.limitEstimated && (client.isReady || carMode)) {
             if (alarm.update(want.speedKmh, want.speedLimitKmh, want.warnToleranceKmh, now)) {
-                BridgeBus.log("Tempo ${want.speedKmh.toInt()} bei Limit ${want.speedLimitKmh}: Warnton")
+                BridgeBus.log(Tx.t("Tempo ${want.speedKmh.toInt()} bei Limit ${want.speedLimitKmh}: Warnton", "Speed ${want.speedKmh.toInt()} at limit ${want.speedLimitKmh}: warning tone"))
                 onOverspeed?.invoke()
             }
         } else alarm.pause()

@@ -11,6 +11,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Holt Kartenkacheln von OpenStreetMap für die kleine Karte der Fahrt-Seite und merkt sie sich auf dem Handy.
@@ -59,7 +60,7 @@ object TileCache {
             c.connectTimeout = 6000
             c.readTimeout = 8000
             if (c.responseCode != 200) {
-                BridgeBus.log("Kartenkachel $k: HTTP ${c.responseCode}")
+                BridgeBus.log(Tx.t("Kartenkachel $k: HTTP ${c.responseCode}", "Map tile $k: HTTP ${c.responseCode}"))
                 return null
             }
             val bytes = c.inputStream.use { it.readBytes() }
@@ -72,7 +73,7 @@ object TileCache {
             trimOnce(ctx)
             return bmp
         } catch (e: Exception) {
-            BridgeBus.log("Kartenkachel $k nicht geladen: ${e.message}")
+            BridgeBus.log(Tx.t("Kartenkachel $k nicht geladen: ${e.message}", "Map tile $k not loaded: ${e.message}"))
             return null
         } finally {
             c?.disconnect()

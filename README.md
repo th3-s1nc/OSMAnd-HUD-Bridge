@@ -30,7 +30,7 @@ An unofficial, private-use Android app that drives a Bluetooth LE head-up displa
 - [OSMAnd](https://osmand.net) (Google Play, F-Droid "OSMAnd~" or the official APK). In OSMAnd, enable this app under *Connected apps* (menu name may vary by version).
 - Notification access for this app (for OSMAnd, WhatsApp, calls and music tracks)
 
-Tested by the author with one HUD on a Xiaomi 10T (LineageOS). Other devices, firmware versions and Android versions are untested.
+Tested by the author with one HUD on a Xiaomi Mi 10T (LineageOS) and a Nubia Z80 Ultra (stock Android). Other devices, firmware versions and Android versions are untested.
 
 **Language:** The app's user interface is currently **German only**. The HUD itself shows no app text, only symbols, numbers and street names. An English translation is planned and contributions are welcome (see Contributing).
 

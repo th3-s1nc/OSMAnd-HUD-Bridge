@@ -61,20 +61,20 @@ class ImportStats {
     /** Eine Zeile zum Speichern: Zahlen durch Komma getrennt. */
     fun toLine(): String = values().joinToString(",")
 
-    /** Lesbare Zusammenfassung (deutsche Zahlen). */
+    /** Lesbare Zusammenfassung (Zahlen im Format der gewählten Sprache). */
     fun describe(): String {
-        fun n(v: Int) = String.format(java.util.Locale.GERMANY, "%,d", v)
-        return "Straßen: ${n(roads)}\n" +
-            "  mit Tempolimit: ${n(withLimit)}\n" +
-            "  mit Tempo-Zone (z. B. Tempo 30): ${n(withZone)}\n" +
-            "  beleuchtet: ${n(lit)}\n" +
-            "  Tunnel: ${n(tunnels)}, Brücken: ${n(bridges)}\n" +
-            "Ortsschilder: ${n(citySigns)}\n" +
-            "Temposchilder: ${n(speedSigns)}\n" +
-            "Blitzer: ${n(cameras)}\n" +
-            "Bahnübergänge: ${n(levelCrossings)}\n" +
-            "Fußgängerüberwege: ${n(crossings)}, davon Zebrastreifen: ${n(zebras)}\n" +
-            "Verkehrsberuhigung: ${n(calming)}"
+        fun n(v: Int) = String.format(Tx.loc(), "%,d", v)
+        return Tx.t("Straßen", "Roads") + ": ${n(roads)}\n" +
+            "  " + Tx.t("mit Tempolimit", "with speed limit") + ": ${n(withLimit)}\n" +
+            "  " + Tx.t("mit Tempo-Zone (z. B. Tempo 30)", "with speed zone (e.g. zone 30)") + ": ${n(withZone)}\n" +
+            "  " + Tx.t("beleuchtet", "lit") + ": ${n(lit)}\n" +
+            "  " + Tx.t("Tunnel", "Tunnels") + ": ${n(tunnels)}, " + Tx.t("Brücken", "bridges") + ": ${n(bridges)}\n" +
+            Tx.t("Ortsschilder", "Town signs") + ": ${n(citySigns)}\n" +
+            Tx.t("Temposchilder", "Speed signs") + ": ${n(speedSigns)}\n" +
+            Tx.t("Blitzer", "Speed cameras") + ": ${n(cameras)}\n" +
+            Tx.t("Bahnübergänge", "Level crossings") + ": ${n(levelCrossings)}\n" +
+            Tx.t("Fußgängerüberwege", "Pedestrian crossings") + ": ${n(crossings)}, " + Tx.t("davon Zebrastreifen", "of which zebra crossings") + ": ${n(zebras)}\n" +
+            Tx.t("Verkehrsberuhigung", "Traffic calming") + ": ${n(calming)}"
     }
 
     companion object {
@@ -125,7 +125,7 @@ object ImportLog {
     /** Hinweistext, wenn die Daten alt sind; sonst null. */
     fun staleHint(entries: List<Entry>, today: java.time.LocalDate): String? {
         val o = oldest(entries, today) ?: return null
-        return if (o.first >= STALE_DAYS) "Daten vom ${o.second}: ein neuer Import wäre gut." else null
+        return if (o.first >= STALE_DAYS) Tx.t("Daten vom ${o.second}: ein neuer Import wäre gut.", "Data from ${o.second}: a new import would be good.") else null
     }
 
     fun describe(entries: List<Entry>): String =
@@ -179,7 +179,7 @@ object PbfImport {
             // Schritt 1: Straßen
             var sorted = false
             DataOutputStream(BufferedOutputStream(FileOutputStream(waysTmp), 1 shl 16)).use { out ->
-                sorted = scanBlobs(open, size, listener, 1, 0.0, W_ROADS, "Straßen suchen", 0) { blk, _ ->
+                sorted = scanBlobs(open, size, listener, 1, 0.0, W_ROADS, Tx.t("Straßen suchen", "Searching roads"), 0) { blk, _ ->
                     wayCount += collectWays(blk, out, ids, stats)
                     true
                 }
@@ -192,7 +192,7 @@ object PbfImport {
             val lat = IntArray(need.size) { MISSING }
             val lon = IntArray(need.size)
             val pois = ArrayList<Poi>()
-            scanBlobs(open, size, listener, 2, W_ROADS, W_NODES, "Punkte lesen", 0, stopAtWays = true) { blk, _ ->
+            scanBlobs(open, size, listener, 2, W_ROADS, W_NODES, Tx.t("Punkte lesen", "Reading points"), 0, stopAtWays = true) { blk, _ ->
                 readNodes(blk, need, lat, lon, pois, stats)
                 true
             }
@@ -211,7 +211,7 @@ object PbfImport {
                 tiles += r.first
                 bytes += r.second
                 bandFiles[band]!!.delete()
-                listener.progress(3, STEPS, base + (1 - base) * (bi + 1) / bands.size, "Kacheln schreiben", tiles)
+                listener.progress(3, STEPS, base + (1 - base) * (bi + 1) / bands.size, Tx.t("Kacheln schreiben", "Writing tiles"), tiles)
             }
             return ImportResult(tiles, wayCount, pois.size, bytes, ((System.currentTimeMillis() - t0) / 1000).toInt(), stats)
         } finally {
@@ -288,7 +288,7 @@ object PbfImport {
         var got = 0
         while (got < len) {
             val r = input.read(b, got, len - got)
-            if (r < 0) { if (got == 0) return false; throw IOException("Datei ist abgeschnitten") }
+            if (r < 0) { if (got == 0) return false; throw IOException(Tx.t("Datei ist abgeschnitten", "File is truncated")) }
             got += r
         }
         return true
@@ -298,7 +298,7 @@ object PbfImport {
         val lenBuf = ByteArray(4)
         if (!readFully(input, lenBuf, 4)) return null
         val hl = ((lenBuf[0].toInt() and 0xff) shl 24) or ((lenBuf[1].toInt() and 0xff) shl 16) or ((lenBuf[2].toInt() and 0xff) shl 8) or (lenBuf[3].toInt() and 0xff)
-        if (hl <= 0 || hl > 1 shl 20) throw IOException("Das ist keine gültige PBF-Datei")
+        if (hl <= 0 || hl > 1 shl 20) throw IOException(Tx.t("Das ist keine gültige PBF-Datei", "This is not a valid PBF file"))
         val hdr = ByteArray(hl)
         readFully(input, hdr, hl)
         var type = ""
@@ -312,7 +312,7 @@ object PbfImport {
                 else -> h.skip(tag and 7)
             }
         }
-        if (dataSize <= 0 || dataSize > 64 shl 20) throw IOException("Das ist keine gültige PBF-Datei")
+        if (dataSize <= 0 || dataSize > 64 shl 20) throw IOException(Tx.t("Das ist keine gültige PBF-Datei", "This is not a valid PBF file"))
         val data = ByteArray(dataSize)
         readFully(input, data, dataSize)
         var raw: ByteArray? = null
@@ -326,13 +326,13 @@ object PbfImport {
                 (2 shl 3) -> rawSize = b.varint().toInt()
                 (3 shl 3) or 2 -> { val l = b.varint().toInt(); z = data.copyOfRange(b.p, b.p + l); b.p += l }
                 else -> {
-                    if ((tag shr 3) in 4..7 && (tag and 7) == 2) throw IOException("Diese Datei ist anders gepackt (nicht zlib) und wird nicht unterstützt")
+                    if ((tag shr 3) in 4..7 && (tag and 7) == 2) throw IOException(Tx.t("Diese Datei ist anders gepackt (nicht zlib) und wird nicht unterstützt", "This file is packed differently (not zlib) and is not supported"))
                     b.skip(tag and 7)
                 }
             }
         }
         val bytes = raw ?: run {
-            val zz = z ?: throw IOException("Leerer Datenblock")
+            val zz = z ?: throw IOException(Tx.t("Leerer Datenblock", "Empty data block"))
             val out = ByteArray(rawSize)
             inflater.reset()
             inflater.setInput(zz)
@@ -342,7 +342,7 @@ object PbfImport {
                 if (r == 0 && (inflater.finished() || inflater.needsInput())) break
                 n += r
             }
-            if (n != rawSize) throw IOException("Datenblock ist defekt")
+            if (n != rawSize) throw IOException(Tx.t("Datenblock ist defekt", "Data block is corrupt"))
             out
         }
         return Blob(type == "OSMData", bytes)
@@ -380,7 +380,7 @@ object PbfImport {
                 1 -> p += 8
                 2 -> { val l = varint().toInt(); p += l }
                 5 -> p += 4
-                else -> throw IOException("Unbekanntes Format in der Datei")
+                else -> throw IOException(Tx.t("Unbekanntes Format in der Datei", "Unknown format in the file"))
             }
         }
     }
@@ -793,7 +793,7 @@ object PbfImport {
                     }
                     if (++counter % 20000 == 0) {
                         if (listener.cancelled()) throw ImportCancelled()
-                        listener.progress(3, STEPS, base + weight * min(1.0, read / total), "Kacheln schreiben", 0)
+                        listener.progress(3, STEPS, base + weight * min(1.0, read / total), Tx.t("Kacheln schreiben", "Writing tiles"), 0)
                     }
                 }
             }

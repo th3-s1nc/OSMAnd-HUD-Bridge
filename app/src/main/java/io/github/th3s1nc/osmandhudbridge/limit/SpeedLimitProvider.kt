@@ -159,13 +159,13 @@ class SpeedLimitProvider(
             val osmCams = datas.flatMap { it.cameras }.distinctBy { it.id }
             val cams = if (importedCameras.isEmpty()) osmCams else CameraImport.combine(osmCams, importedCameras, loc.latitude, loc.longitude, ::allowKind)
             val hit = camWarn.update(cams, loc.latitude, loc.longitude, heading, speed, cameraLevel)
-            if (hit.sound) BridgeBus.log("Blitzer in ${hit.distanceM} m voraus")
+            if (hit.sound) BridgeBus.log(Tx.t("Blitzer in ${hit.distanceM} m voraus", "Speed camera in ${hit.distanceM} m ahead"))
             val shown = hit.distanceM?.let { it / 10 * 10 }
             if (shown != camShown || hit.sound) { camShown = shown; onCamera(shown, hit.sound, hit.limitKmh) }
         }
         if (pointMask != 0) {
             val kind = pointWarn.update(datas.flatMap { it.points }.distinctBy { it.id }, loc.latitude, loc.longitude, heading, speed, pointMask)
-            if (kind != 0) { BridgeBus.log("Hinweis voraus: " + when (kind) { PointKind.LEVEL_CROSSING -> "Bahnübergang"; PointKind.ZEBRA -> "Zebrastreifen"; else -> "Verkehrsberuhigung" }); onPoint(kind) }
+            if (kind != 0) { BridgeBus.log(Tx.t("Hinweis voraus: ", "Notice ahead: ") + when (kind) { PointKind.LEVEL_CROSSING -> Tx.t("Bahnübergang", "level crossing"); PointKind.ZEBRA -> Tx.t("Zebrastreifen", "zebra crossing"); else -> Tx.t("Verkehrsberuhigung", "traffic calming") }); onPoint(kind) }
         }
         val haveData = ways.isNotEmpty() || TileMath.tileOf(loc.latitude, loc.longitude) in tiles
         var zone: Zone? = null
@@ -227,7 +227,7 @@ class SpeedLimitProvider(
             val k = keys to tilesVersion
             if (curveIndexKey != k) { curveIndex = CurveIndex(ways); curveIndexKey = k }
             if (curveWarn.update(ways, curveIndex!!, loc.latitude, loc.longitude, heading, speed, curveLevel, limit, zone == Zone.INNER)) {
-                BridgeBus.log("Scharfe Kurve voraus (Radius ${curveWarn.lastBend?.radiusM?.toInt()} m)")
+                BridgeBus.log(Tx.t("Scharfe Kurve voraus (Radius ${curveWarn.lastBend?.radiusM?.toInt()} m)", "Sharp bend ahead (radius ${curveWarn.lastBend?.radiusM?.toInt()} m)"))
                 onPoint(PointKind.CURVE)
             }
         }
@@ -247,15 +247,15 @@ class SpeedLimitProvider(
                     tilesVersion++
                     failures = 0
                     nextFetchAt = SystemClock.elapsedRealtime() + 300
-                    BridgeBus.log("OSM: Kachel ${key.latIdx}/${key.lonIdx} ${r.source}, ${r.data.ways.size} Straßen, " +
-                        "${r.data.ways.count { w -> w.tags.keys.any { k -> k.startsWith("maxspeed") } }} mit Limit, ${r.data.signs.size} Ortsschilder, " +
-                        (if (r.data.hasCameras) "${r.data.cameras.size} Blitzer" else "keine Blitzerdaten (alte Kachel)"))
+                    BridgeBus.log(Tx.t("OSM: Kachel ${key.latIdx}/${key.lonIdx} ${r.source}, ${r.data.ways.size} Straßen, ", "OSM: tile ${key.latIdx}/${key.lonIdx} ${r.source}, ${r.data.ways.size} roads, ") +
+                        Tx.t("${r.data.ways.count { w -> w.tags.keys.any { k -> k.startsWith("maxspeed") } }} mit Limit, ${r.data.signs.size} Ortsschilder, ", "${r.data.ways.count { w -> w.tags.keys.any { k -> k.startsWith("maxspeed") } }} with limit, ${r.data.signs.size} town signs, ") +
+                        (if (r.data.hasCameras) Tx.t("${r.data.cameras.size} Blitzer", "${r.data.cameras.size} speed cameras") else Tx.t("keine Blitzerdaten (alte Kachel)", "no camera data (old tile)")))
                     updateCameraStat()
                 }.onFailure {
                     failures++
                     val wait = Backoff.delayMs(failures)
                     nextFetchAt = SystemClock.elapsedRealtime() + wait
-                    BridgeBus.log("OSM-Abfrage fehlgeschlagen (${it.javaClass.simpleName}: ${it.message}), neuer Versuch in ${wait / 1000} s")
+                    BridgeBus.log(Tx.t("OSM-Abfrage fehlgeschlagen (${it.javaClass.simpleName}: ${it.message}), neuer Versuch in ${wait / 1000} s", "OSM query failed (${it.javaClass.simpleName}: ${it.message}), new attempt in ${wait / 1000} s"))
                 }
             }
             // Kachel ist gültig, aber älter als 30 Tage: jetzt im Hintergrund still erneuern
@@ -271,31 +271,31 @@ class SpeedLimitProvider(
         val cached = cache?.read(key, now)
         if (offlineOnly) {
             // nur Speicher, egal wie alt; fehlt die Kachel, gilt sie als leer (kein Wiederholen, kein Netz)
-            if (cached != null) try { return Loaded(parse(cached.text), "aus Speicher (Offline-Daten)", false) } catch (_: Exception) { }
+            if (cached != null) try { return Loaded(parse(cached.text), Tx.t("aus Speicher (Offline-Daten)", "from storage (offline data)"), false) } catch (_: Exception) { }
             cache?.readLegacy(key, now)?.let { old ->
-                try { return Loaded(parse(old.text).let { TileData(it.ways, it.signs, emptyList(), false) }, "aus Speicher der Vorversion (Offline-Daten)", false) } catch (_: Exception) { }
+                try { return Loaded(parse(old.text).let { TileData(it.ways, it.signs, emptyList(), false) }, Tx.t("aus Speicher der Vorversion (Offline-Daten)", "from storage of the previous version (offline data)"), false) } catch (_: Exception) { }
             }
-            return Loaded(TileData(emptyList(), emptyList(), emptyList(), false), "nicht gespeichert (Offline-Daten)", false)
+            return Loaded(TileData(emptyList(), emptyList(), emptyList(), false), Tx.t("nicht gespeichert (Offline-Daten)", "not stored (offline data)"), false)
         }
         // Importierte Kacheln (aus einer Kartendatei) gelten immer und werden nie online erneuert: ein neuer Import ist der Weg zu neuen Daten
         val imported = cached != null && cached.text.startsWith(PbfImport.MARKER)
         if (cached != null && (imported || cached.ageMs < TileCache.VALID_MS)) {
             try {
-                return Loaded(parse(cached.text), if (imported) "aus Import" else "aus Zwischenspeicher", !imported && cached.ageMs >= TileCache.REFRESH_MS)
+                return Loaded(parse(cached.text), if (imported) Tx.t("aus Import", "from import") else Tx.t("aus Zwischenspeicher", "from cache"), !imported && cached.ageMs >= TileCache.REFRESH_MS)
             } catch (_: Exception) { /* defekt: neu laden */ }
         }
         try {
             val text = downloadRace(query(key))
             val data = parse(text)
             cache?.write(key, text)
-            return Loaded(data, "geladen", false)
+            return Loaded(data, Tx.t("geladen", "loaded"), false)
         } catch (e: Exception) {
             if (cached != null) {
-                try { return Loaded(parse(cached.text), "aus altem Zwischenspeicher (kein Netz)", false) } catch (_: Exception) { }
+                try { return Loaded(parse(cached.text), Tx.t("aus altem Zwischenspeicher (kein Netz)", "from old cache (no network)"), false) } catch (_: Exception) { }
             }
             // Kachel der Vorversion (ohne Blitzer): Straßen und Limits stimmen weiter, Blitzer sind dann unbekannt
             cache?.readLegacy(key, now)?.let { old ->
-                try { return Loaded(parse(old.text).let { TileData(it.ways, it.signs, emptyList(), false) }, "aus Zwischenspeicher der Vorversion (kein Netz)", false) } catch (_: Exception) { }
+                try { return Loaded(parse(old.text).let { TileData(it.ways, it.signs, emptyList(), false) }, Tx.t("aus Zwischenspeicher der Vorversion (kein Netz)", "from cache of the previous version (no network)"), false) } catch (_: Exception) { }
             }
             throw e
         }

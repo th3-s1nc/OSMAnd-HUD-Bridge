@@ -22,6 +22,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 enum class DlState { IDLE, RUNNING, PAUSED }
 
@@ -50,6 +51,8 @@ class DownloadService : Service() {
     private val main = Handler(Looper.getMainLooper())
     private var wake: PowerManager.WakeLock? = null
 
+    override fun attachBaseContext(newBase: Context) { super.attachBaseContext(AppLang.wrap(newBase)) }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -71,7 +74,7 @@ class DownloadService : Service() {
         }
         DownloadBus.changed()
         try { startFg(buildNotification(name, DownloadBus.done, DownloadBus.total)) } catch (e: Exception) {
-            DownloadBus.state = DlState.PAUSED; DownloadBus.note = "Start nicht möglich (${e.message})"
+            DownloadBus.state = DlState.PAUSED; DownloadBus.note = Tx.t("Start nicht möglich (${e.message})", "Cannot start (${e.message})")
             DownloadBus.changed()
             stopSelf()
             return START_NOT_STICKY
@@ -109,14 +112,14 @@ class DownloadService : Service() {
                     Outcome.BROKEN -> {
                         // Verbindung weg (zum Beispiel WLAN verlassen). Mit erlaubten mobilen Daten selbst neu verbinden, sonst pausieren.
                         if (!mobileAllowed() || System.currentTimeMillis() - progressAt > 5 * 60_000L) {
-                            pause("Pausiert: Verbindung unterbrochen", DownloadBus.done, DownloadBus.total)
+                            pause(Tx.t("Pausiert: Verbindung unterbrochen", "Paused: connection lost"), DownloadBus.done, DownloadBus.total)
                             return
                         }
-                        DownloadBus.note = "Verbindung weg, neuer Versuch …"
+                        DownloadBus.note = Tx.t("Verbindung weg, neuer Versuch …", "Connection lost, retrying …")
                         DownloadBus.changed()
                         var waited = 0
                         while (waited < 3000) {
-                            if (DownloadBus.pauseRequested) { pause("Pausiert", DownloadBus.done, DownloadBus.total); return }
+                            if (DownloadBus.pauseRequested) { pause(Tx.t("Pausiert", "Paused"), DownloadBus.done, DownloadBus.total); return }
                             try { Thread.sleep(250) } catch (_: InterruptedException) { }
                             waited += 250
                         }
@@ -145,20 +148,20 @@ class DownloadService : Service() {
             }
             conn = c
             val startedMetered = isMetered()
-            if (startedMetered && !mobileAllowed()) { pause("Pausiert: kein WLAN, Mobile Daten sind aus", offset, DownloadBus.total, true); return Outcome.STOPPED }
+            if (startedMetered && !mobileAllowed()) { pause(Tx.t("Pausiert: kein WLAN, Mobile Daten sind aus", "Paused: no Wi-Fi, mobile data is off"), offset, DownloadBus.total, true); return Outcome.STOPPED }
             val code = c.responseCode
-            if (code != 200 && code != 206) { fail("Server antwortet mit Fehler $code"); return Outcome.STOPPED }
+            if (code != 200 && code != 206) { fail(Tx.t("Server antwortet mit Fehler $code", "Server answers with error $code")); return Outcome.STOPPED }
             if (code == 200 && offset > 0) offset = 0 // Server kann nicht fortsetzen: von vorn
             val len = c.contentLengthLong
             val total = if (len > 0) offset + len else 0L
             if (!RegionDownload.enoughSpace(filesDir.usableSpace, total, offset)) {
-                fail("Zu wenig freier Speicher (gebraucht werden etwa ${RegionDownload.sizeText(RegionDownload.neededBytes(total))})")
+                fail(Tx.t("Zu wenig freier Speicher (gebraucht werden etwa ${RegionDownload.sizeText(RegionDownload.neededBytes(total))})", "Not enough free space (about ${RegionDownload.sizeText(RegionDownload.neededBytes(total))} needed)"))
                 return Outcome.STOPPED
             }
             sp.edit().putLong(BridgeService.KEY_DL_TOTAL, total).apply()
             DownloadBus.total = total
             DownloadBus.done = offset
-            DownloadBus.note = if (startedMetered) "Mobilfunk" else "WLAN"
+            DownloadBus.note = if (startedMetered) Tx.t("Mobilfunk", "Mobile data") else Tx.t("WLAN", "Wi-Fi")
             DownloadBus.pausedForMobile = false
             DownloadBus.changed()
             var done = offset
@@ -168,14 +171,14 @@ class DownloadService : Service() {
             FileOutputStream(part, offset > 0).use { out ->
                 c.inputStream.use { input ->
                     while (true) {
-                        if (DownloadBus.pauseRequested) { pause("Pausiert", done, total); return Outcome.STOPPED }
+                        if (DownloadBus.pauseRequested) { pause(Tx.t("Pausiert", "Paused"), done, total); return Outcome.STOPPED }
                         val now = System.currentTimeMillis()
                         if (now - lastNet > 3000) {
                             lastNet = now
                             val metered = isMetered()
-                            if (metered && !mobileAllowed()) { pause("Pausiert: WLAN weg, Mobile Daten sind aus", done, total, true); return Outcome.STOPPED }
+                            if (metered && !mobileAllowed()) { pause(Tx.t("Pausiert: WLAN weg, Mobile Daten sind aus", "Paused: Wi-Fi lost, mobile data is off"), done, total, true); return Outcome.STOPPED }
                             if (startedMetered && !metered) return Outcome.SWITCH // WLAN ist wieder da
-                            DownloadBus.note = if (metered) "Mobilfunk" else "WLAN"
+                            DownloadBus.note = if (metered) Tx.t("Mobilfunk", "Mobile data") else Tx.t("WLAN", "Wi-Fi")
                         }
                         val n = input.read(buf)
                         if (n < 0) break
@@ -197,7 +200,7 @@ class DownloadService : Service() {
         } catch (e: java.io.IOException) {
             return Outcome.BROKEN
         } catch (e: Throwable) {
-            fail("Fehler: ${e.message ?: e.javaClass.simpleName}")
+            fail(Tx.t("Fehler: ", "Error: ") + (e.message ?: e.javaClass.simpleName))
             return Outcome.STOPPED
         } finally {
             try { conn?.disconnect() } catch (_: Exception) { }
@@ -226,7 +229,7 @@ class DownloadService : Service() {
     private fun finishDownload(part: File, id: String?, name: String, url: String) {
         val ready = File(filesDir, READY_NAME)
         ready.delete()
-        if (!part.renameTo(ready)) { fail("Datei konnte nicht umbenannt werden"); return }
+        if (!part.renameTo(ready)) { fail(Tx.t("Datei konnte nicht umbenannt werden", "File could not be renamed")); return }
         val sp = getSharedPreferences(BridgeService.PREFS, Context.MODE_PRIVATE)
         sp.edit().remove(BridgeService.KEY_DL_URL).remove(BridgeService.KEY_DL_ID).remove(BridgeService.KEY_DL_NAME).remove(BridgeService.KEY_DL_TOTAL).apply()
         DownloadBus.state = DlState.IDLE
@@ -245,7 +248,7 @@ class DownloadService : Service() {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 val n = NotificationCompat.Builder(this, CHANNEL)
                     .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                    .setContentTitle("Karte laden")
+                    .setContentTitle(Tx.t("Karte laden", "Load map"))
                     .setContentText(text)
                     .setAutoCancel(true)
                     .setContentIntent(openApp())
@@ -268,20 +271,20 @@ class DownloadService : Service() {
         )
         return NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("$name wird geladen")
-            .setContentText(if (total > 0) "$pct % · ${RegionDownload.sizeText(done)} von ${RegionDownload.sizeText(total)}" else RegionDownload.sizeText(done))
+            .setContentTitle(Tx.t("$name wird geladen", "Loading $name"))
+            .setContentText(if (total > 0) "$pct % · ${RegionDownload.sizeText(done)} ${Tx.t("von", "of")} ${RegionDownload.sizeText(total)}" else RegionDownload.sizeText(done))
             .setProgress(100, pct, total <= 0)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openApp())
-            .addAction(0, "Pausieren", pause)
+            .addAction(0, Tx.t("Pausieren", "Pause"), pause)
             .build()
     }
 
     private fun ensureChannel() {
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Karten laden", NotificationManager.IMPORTANCE_LOW))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, Tx.t("Karten laden", "Map downloads"), NotificationManager.IMPORTANCE_LOW))
         }
     }
 
@@ -327,7 +330,7 @@ class DownloadService : Service() {
             DownloadBus.name = sp.getString(BridgeService.KEY_DL_NAME, null) ?: "Region"
             DownloadBus.done = part.length()
             DownloadBus.total = sp.getLong(BridgeService.KEY_DL_TOTAL, 0L)
-            DownloadBus.note = "Pausiert"
+            DownloadBus.note = Tx.t("Pausiert", "Paused")
             DownloadBus.state = DlState.PAUSED
         }
     }

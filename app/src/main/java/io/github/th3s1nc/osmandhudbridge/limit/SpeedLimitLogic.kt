@@ -120,7 +120,7 @@ class RepeatSummary {
 
     fun take(): String? {
         if (count == 0) return null
-        val text = "$count Fehlversuche (" + reasons.entries.joinToString(", ") { "${it.value}x ${it.key}" } + ")"
+        val text = Tx.t("$count Fehlversuche (", "$count failed attempts (") + reasons.entries.joinToString(", ") { "${it.value}x ${it.key}" } + ")"
         reasons.clear(); count = 0
         return text
     }

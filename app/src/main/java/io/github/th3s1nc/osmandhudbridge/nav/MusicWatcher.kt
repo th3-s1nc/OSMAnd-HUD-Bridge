@@ -8,6 +8,7 @@ import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
 import android.os.Handler
 import io.github.th3s1nc.osmandhudbridge.BridgeBus
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Meldet, wenn in einer Musik-App (Spotify, YouTube Music, ...) ein neuer Titel beginnt. Nutzt die Mediensitzungen von Android;
@@ -37,10 +38,10 @@ class MusicWatcher(
             register(m.getActiveSessions(comp))
             true
         } catch (e: SecurityException) {
-            BridgeBus.log("Spotify-Anzeige: Benachrichtigungszugriff fehlt (Werkzeuge, Einrichtung)")
+            BridgeBus.log(Tx.t("Spotify-Anzeige: Benachrichtigungszugriff fehlt (Werkzeuge, Einrichtung)", "Spotify display: notification access missing (Tools, Setup)"))
             false
         } catch (e: Exception) {
-            BridgeBus.log("Spotify-Anzeige: Fehler (${e.message ?: e.javaClass.simpleName})")
+            BridgeBus.log(Tx.t("Spotify-Anzeige: Fehler (${e.message ?: e.javaClass.simpleName})", "Spotify display: error (${e.message ?: e.javaClass.simpleName})"))
             false
         }
     }

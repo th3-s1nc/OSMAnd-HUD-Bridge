@@ -1,4 +1,5 @@
 package io.github.th3s1nc.osmandhudbridge.protocol
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Werte, die in den Textzeilen von Guide und Cruiser stehen können.
@@ -26,7 +27,23 @@ enum class HudValue(
     ELEVATION("ele", "Höhe", 82, "HOEHE", HudProtocol.F_ELEVATION, "412 m"),
     NEXT_STREET("street", "Nächste Straße", 7, "NAECHSTE STRASSE", HudProtocol.F_NEXT_STREET, "Hauptstr.");
 
+    /** Name für die Auswahlliste in der Sprache der App. */
+    val displayTitle: String get() = if (Tx.en) EN[key] ?: title else title
+
     companion object {
+        private val EN = mapOf(
+            "empty" to "– Empty –",
+            "speed" to "Speed",
+            "limit" to "Speed limit",
+            "rdist" to "Remaining distance",
+            "rtime" to "Remaining time",
+            "arr" to "Arrival",
+            "ttime" to "Ride time",
+            "tdist" to "Distance",
+            "ele" to "Altitude",
+            "street" to "Next street"
+        )
+
         fun fromKey(key: String?): HudValue? = values().firstOrNull { it.key == key }
     }
 }

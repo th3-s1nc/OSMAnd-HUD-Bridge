@@ -39,6 +39,8 @@ import io.github.th3s1nc.osmandhudbridge.track.RideStore
 import io.github.th3s1nc.osmandhudbridge.track.SeasonSummary
 import io.github.th3s1nc.osmandhudbridge.track.TrackRecorder
 import io.github.th3s1nc.osmandhudbridge.track.TrackSession
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
+import io.github.th3s1nc.osmandhudbridge.limit.StatusText
 
 class MainActivity : AppCompatActivity() {
     private lateinit var tvHud: TextView
@@ -59,6 +61,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoredPage = savedInstanceState?.getInt("page", -1)?.takeIf { it >= 0 }
         BridgeBus.init(applicationContext)
         setContentView(R.layout.activity_main)
 
@@ -78,6 +81,7 @@ class MainActivity : AppCompatActivity() {
         setupHome()
         setupDisplay()
         setupInfoButtons()
+        setupLanguage()
         setupSettings()
         setupTools()
         setupInfo()
@@ -146,13 +150,42 @@ class MainActivity : AppCompatActivity() {
         nav.setOnItemReselectedListener { item -> showPage(pageForNav(item.itemId)) }
         findViewById<View>(R.id.btnHeaderInfo).setOnClickListener { showPage(4) }
         onBackPressedDispatcher.addCallback(this, infoBackCallback)
+        // Nach dem Umschalten der Sprache (Activity wird neu gebaut) auf der gleichen Seite bleiben
+        restoredPage?.let { p ->
+            val navId = when (p) { 1 -> R.id.nav_display; 2 -> R.id.nav_settings; 3 -> R.id.nav_tools; 5 -> R.id.nav_tracking; else -> R.id.nav_home }
+            if (p != 4) nav.selectedItemId = navId
+            showPage(p)
+        }
+    }
+
+    private var restoredPage: Int? = null
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("page", currentPage)
     }
 
     /** Kleines graues i: klappt die Beschreibung zum Schalter auf und zu. */
+    /** i-Knopf: zeigt die Erklärung in einem Fenster. Titel ist der Name der Zeile, der Text kommt aus der (versteckten) Textzeile. */
     private fun setupInfoToggle(buttonId: Int, vararg textIds: Int) {
-        findViewById<View>(buttonId).setOnClickListener {
-            val show = findViewById<View>(textIds[0]).visibility != View.VISIBLE
-            for (id in textIds) findViewById<View>(id).visibility = if (show) View.VISIBLE else View.GONE
+        for (id in textIds) findViewById<View>(id).visibility = View.GONE
+        val btn = findViewById<View>(buttonId)
+        btn.setOnClickListener {
+            val msg = textIds.map { (findViewById<View>(it) as? TextView)?.text?.toString().orEmpty() }
+                .filter { it.isNotBlank() }.joinToString("\n\n")
+            var title: CharSequence? = null
+            val row = btn.parent as? android.view.ViewGroup
+            if (row != null) {
+                for (i in 0 until row.childCount) {
+                    val c = row.getChildAt(i)
+                    if (c is TextView && c.text.isNotBlank()) { title = c.text; break }
+                }
+            }
+            AlertDialog.Builder(this)
+                .setTitle(title)
+                .setMessage(msg)
+                .setPositiveButton("OK", null)
+                .show()
         }
     }
 
@@ -168,14 +201,25 @@ class MainActivity : AppCompatActivity() {
         Thread {
             val text = try {
                 val c = io.github.th3s1nc.osmandhudbridge.limit.TileCache(dir).countCameras()
-                if (c.tilesWithData == 0) "keine Kacheln mit Blitzerdaten" + (if (c.legacyOnly > 0) " (${c.legacyOnly} ältere Kacheln ohne Blitzerdaten)" else "")
-                else "${c.cameras} Blitzer in ${c.tilesWithCameras} von ${c.tilesWithData} Kacheln mit Blitzerdaten" +
-                    (if (c.legacyOnly > 0) " (dazu ${c.legacyOnly} ältere Kacheln ohne Blitzerdaten)" else "")
-            } catch (e: Exception) { "Zählung fehlgeschlagen" }
+                if (c.tilesWithData == 0) Tx.t("keine Kacheln mit Blitzerdaten", "no tiles with camera data") +
+                    (if (c.legacyOnly > 0) Tx.t(" (${c.legacyOnly} ältere Kacheln ohne Blitzerdaten)", " (${c.legacyOnly} older tiles without camera data)") else "")
+                else Tx.t("${c.cameras} Blitzer in ${c.tilesWithCameras} von ${c.tilesWithData} Kacheln mit Blitzerdaten", "${c.cameras} cameras in ${c.tilesWithCameras} of ${c.tilesWithData} tiles with camera data") +
+                    (if (c.legacyOnly > 0) Tx.t(" (dazu ${c.legacyOnly} ältere Kacheln ohne Blitzerdaten)", " (plus ${c.legacyOnly} older tiles without camera data)") else "")
+            } catch (e: Exception) { Tx.t("Zählung fehlgeschlagen", "Count failed") }
             BridgeBus.camerasAll = text
             camScanAt = android.os.SystemClock.elapsedRealtime()
             camScanBusy = false
         }.start()
+    }
+
+    /** Sprachwahl (Werkzeuge): Automatisch, Deutsch oder English. */
+    private fun setupLanguage() {
+        val rg = findViewById<android.widget.RadioGroup>(R.id.rgLang)
+        rg.check(when (AppLang.get(this)) { "de" -> R.id.rbLangDe; "en" -> R.id.rbLangEn; else -> R.id.rbLangAuto })
+        rg.setOnCheckedChangeListener { _, id ->
+            val code = when (id) { R.id.rbLangDe -> "de"; R.id.rbLangEn -> "en"; else -> AppLang.AUTO }
+            if (code != AppLang.get(this)) AppLang.set(this, code) // baut das Fenster neu auf
+        }
     }
 
     /** i-Knöpfe auf den Seiten Tempolimit, Werkzeuge und Tracking. */
@@ -324,7 +368,7 @@ class MainActivity : AppCompatActivity() {
 
         // Pfeil anzeigen ab (Regler: Kurz, Normal, Lang, Immer)
         val steps = listOf(ThresholdMode.SHORT, ThresholdMode.NORMAL, ThresholdMode.LONG, ThresholdMode.ALWAYS)
-        val names = listOf("Kurz", "Normal", "Lang", "Immer")
+        val names = listOf(Tx.t("Kurz", "Short"), "Normal", Tx.t("Lang", "Long"), Tx.t("Immer", "Always"))
         val sldThr = findViewById<Slider>(R.id.sldThr)
         val tvThrName = findViewById<TextView>(R.id.tvThrName)
         val boxThr = findViewById<View>(R.id.boxThrRows)
@@ -355,7 +399,7 @@ class MainActivity : AppCompatActivity() {
         val swWarn = findViewById<MaterialSwitch>(R.id.swWarn)
         val sldWarn = findViewById<Slider>(R.id.sldWarnTol)
         val txtWarn = findViewById<TextView>(R.id.txtWarnTol)
-        fun warnText(v: Int) { txtWarn.text = "Überschreitung: $v km/h" }
+        fun warnText(v: Int) { txtWarn.text = Tx.t("Überschreitung: $v km/h", "Over the limit: $v km/h") }
         val tol = prefs.getInt(BridgeService.KEY_WARN_TOL, BridgeService.DEFAULT_WARN_TOL).coerceIn(0, 30)
         sldWarn.value = tol.toFloat()
         warnText(tol)
@@ -367,8 +411,8 @@ class MainActivity : AppCompatActivity() {
         val txtCam = findViewById<TextView>(R.id.txtCamLead)
         val txtCamHint = findViewById<TextView>(R.id.txtCamHint)
         fun camText(level: Int) {
-            val name = when (level) { 0 -> "Kurz (ca. 6 s)"; 2 -> "Lang (ca. 15 s)"; else -> "Normal (ca. 10 s)" }
-            txtCam.text = "Warnabstand: $name"
+            val name = when (level) { 0 -> Tx.t("Kurz (ca. 6 s)", "Short (approx. 6 s)"); 2 -> Tx.t("Lang (ca. 15 s)", "Long (approx. 15 s)"); else -> Tx.t("Normal (ca. 10 s)", "Normal (approx. 10 s)") }
+            txtCam.text = Tx.t("Warnabstand: ", "Warning distance: ") + name
             txtCamHint.text = io.github.th3s1nc.osmandhudbridge.limit.CameraWarn.leadHint(level)
         }
         val swCamSound = findViewById<MaterialSwitch>(R.id.swCamSound)
@@ -402,7 +446,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().putBoolean(key, on).apply()
                 applyConfigIfRunning()
                 if (on && io.github.th3s1nc.osmandhudbridge.limit.PbfImport.countImported(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(applicationContext)) == 0) {
-                    Toast.makeText(this, "Hinweis: Ohne importierte Straßendaten gibt es keinen Ton. Importiere zuerst eine Datei.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, Tx.t("Hinweis: Ohne importierte Straßendaten gibt es keinen Ton. Importiere zuerst eine Datei.", "Note: without imported road data there is no tone. Import a file first."), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -411,7 +455,7 @@ class MainActivity : AppCompatActivity() {
         val txtCurve = findViewById<TextView>(R.id.txtCurveLevel)
         val txtCurveHint = findViewById<TextView>(R.id.txtCurveHint)
         fun curveUi() {
-            txtCurve.text = "Empfindlichkeit: " + io.github.th3s1nc.osmandhudbridge.limit.CurveLevel.name(sldCurve.value.toInt())
+            txtCurve.text = Tx.t("Empfindlichkeit: ", "Sensitivity: ") + when (sldCurve.value.toInt()) { 0 -> Tx.t("Wenig", "Low"); 2 -> Tx.t("Viel", "High"); else -> "Normal" }
             sldCurve.isEnabled = swCurve.isChecked
             val al = if (swCurve.isChecked) 1f else 0.5f
             txtCurve.alpha = al; txtCurveHint.alpha = al
@@ -457,10 +501,10 @@ class MainActivity : AppCompatActivity() {
                 swCamera.isChecked = false // bis zur Antwort aus
                 camRevert = false
                 AlertDialog.Builder(this)
-                    .setTitle("Blitzer-Warnung")
-                    .setMessage("Achtung: In Deutschland und einigen anderen Ländern dürfen Fahrer kein Gerät nutzen, das vor Blitzern warnt. Das kann ein Bußgeld kosten. Du bist selbst dafür verantwortlich, wo du die Funktion nutzt. Die Daten kommen aus OpenStreetMap und sind lückenhaft: mobile Blitzer und Abschnittskontrollen fehlen.")
-                    .setNegativeButton("Abbrechen", null)
-                    .setPositiveButton("Trotzdem aktivieren") { _, _ ->
+                    .setTitle(Tx.t("Blitzer-Warnung", "Speed camera warning"))
+                    .setMessage(Tx.t("Achtung: In Deutschland und einigen anderen Ländern dürfen Fahrer kein Gerät nutzen, das vor Blitzern warnt. Das kann ein Bußgeld kosten. Du bist selbst dafür verantwortlich, wo du die Funktion nutzt. Die Daten kommen aus OpenStreetMap und sind lückenhaft: mobile Blitzer und Abschnittskontrollen fehlen.", "Warning: in Germany and some other countries drivers must not use a device that warns about speed cameras. This can cost a fine. You are responsible for where you use this function. The data comes from OpenStreetMap and has gaps: mobile cameras and section controls are missing."))
+                    .setNegativeButton(Tx.t("Abbrechen", "Cancel"), null)
+                    .setPositiveButton(Tx.t("Trotzdem aktivieren", "Enable anyway")) { _, _ ->
                         camRevert = true
                         swCamera.isChecked = true
                         camRevert = false
@@ -512,7 +556,7 @@ class MainActivity : AppCompatActivity() {
         swJust.setOnCheckedChangeListener { _, on ->
             if (justageSyncing) return@setOnCheckedChangeListener
             if (on && !BridgeService.running) {
-                Toast.makeText(this, "Bitte zuerst das HUD verbinden (Übersicht, Start).", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, Tx.t("Bitte zuerst das HUD verbinden (Übersicht, Start).", "Please connect the HUD first (Overview, Start)."), Toast.LENGTH_SHORT).show()
                 justageSyncing = true; swJust.isChecked = false; justageSyncing = false
                 return@setOnCheckedChangeListener
             }
@@ -533,7 +577,7 @@ class MainActivity : AppCompatActivity() {
                 return
             } catch (_: Exception) { }
         }
-        Toast.makeText(this, "OSMAnd ist nicht installiert", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, Tx.t("OSMAnd ist nicht installiert", "OSMAnd is not installed"), Toast.LENGTH_SHORT).show()
     }
 
     private val pickCamList = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -548,13 +592,13 @@ class MainActivity : AppCompatActivity() {
         val bar = findViewById<com.google.android.material.progressindicator.LinearProgressIndicator>(R.id.barCam)
         val pick = findViewById<MaterialButton>(R.id.btnCamPick)
         box.visibility = View.VISIBLE; pick.isEnabled = false
-        txt.text = "Datei 1 von ${uris.size}"; bar.setProgressCompat(0, false)
+        txt.text = Tx.t("Datei 1 von ${uris.size}", "File 1 of ${uris.size}"); bar.setProgressCompat(0, false)
         Thread {
             var files = 0
             val all = ArrayList<io.github.th3s1nc.osmandhudbridge.limit.CameraImport.Parsed>()
             for ((idx, u) in uris.withIndex()) {
                 runOnUiThread {
-                    txt.text = "Datei ${idx + 1} von ${uris.size}"
+                    txt.text = Tx.t("Datei ${idx + 1} von ${uris.size}", "File ${idx + 1} of ${uris.size}")
                     bar.setProgressCompat(idx * 1000 / uris.size, true)
                 }
                 try {
@@ -566,14 +610,14 @@ class MainActivity : AppCompatActivity() {
                     if (list.isNotEmpty()) { all += list; files++ }
                 } catch (_: Exception) { }
             }
-            runOnUiThread { txt.text = "Zusammenführen …"; bar.setProgressCompat(1000, true) }
+            runOnUiThread { txt.text = Tx.t("Zusammenführen …", "Merging …"); bar.setProgressCompat(1000, true) }
             val merged = io.github.th3s1nc.osmandhudbridge.limit.CameraImport.merge(all)
-            val msg = if (merged.isEmpty()) "Keine Blitzer in den Dateien gefunden (erwartet: GPX mit Wegpunkten)." else {
+            val msg = if (merged.isEmpty()) Tx.t("Keine Blitzer in den Dateien gefunden (erwartet: GPX mit Wegpunkten).", "No cameras found in the files (expected: GPX with waypoints).") else {
                 try {
                     io.github.th3s1nc.osmandhudbridge.limit.CameraStore.save(app.filesDir, merged)
                     prefs.edit().putInt(BridgeService.KEY_CAM_LIST_COUNT, merged.size).putInt(BridgeService.KEY_CAM_LIST_FILES, files).apply()
-                    "${merged.size} Blitzer importiert"
-                } catch (e: Exception) { "Speichern nicht möglich (${e.message})" }
+                    Tx.t("${merged.size} Blitzer importiert", "${merged.size} cameras imported")
+                } catch (e: Exception) { Tx.t("Speichern nicht möglich (${e.message})", "Cannot save (${e.message})") }
             }
             runOnUiThread {
                 box.visibility = View.GONE; pick.isEnabled = true
@@ -589,8 +633,8 @@ class MainActivity : AppCompatActivity() {
         val n = prefs.getInt(BridgeService.KEY_CAM_LIST_COUNT, 0)
         val files = prefs.getInt(BridgeService.KEY_CAM_LIST_FILES, 0)
         val has = n > 0 && io.github.th3s1nc.osmandhudbridge.limit.CameraStore.file(filesDir).isFile
-        findViewById<TextView>(R.id.tvCamListStat).text = if (has) String.format(java.util.Locale.GERMANY, "%,d Blitzer importiert", n) else "Noch keine Liste importiert"
-        findViewById<TextView>(R.id.tvCamListSub).text = "aus $files Dateien, doppelte (unter 30 m) zusammengelegt"
+        findViewById<TextView>(R.id.tvCamListStat).text = if (has) String.format(Tx.loc(), Tx.t("%,d Blitzer importiert", "%,d cameras imported"), n) else Tx.t("Noch keine Liste importiert", "No list imported yet")
+        findViewById<TextView>(R.id.tvCamListSub).text = Tx.t("aus $files Dateien, doppelte (unter 30 m) zusammengelegt", "from $files files, duplicates (under 30 m) merged")
         findViewById<View>(R.id.boxCamList).visibility = if (has) View.VISIBLE else View.GONE
     }
 
@@ -620,12 +664,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvDlName).text = DownloadBus.name
         findViewById<com.google.android.material.progressindicator.LinearProgressIndicator>(R.id.barDl)
             .setProgressCompat((frac * 1000).toInt().coerceIn(0, 1000), false)
-        val sizes = io.github.th3s1nc.osmandhudbridge.limit.RegionDownload.sizeText(DownloadBus.done) + " von " +
+        val sizes = io.github.th3s1nc.osmandhudbridge.limit.RegionDownload.sizeText(DownloadBus.done) + Tx.t(" von ", " of ") +
             io.github.th3s1nc.osmandhudbridge.limit.RegionDownload.sizeText(DownloadBus.total)
         findViewById<TextView>(R.id.tvDlText).text =
-            (if (st == DlState.PAUSED) "Pausiert bei " else "") + "${(frac * 100).toInt()} %  ·  " + sizes
+            (if (st == DlState.PAUSED) Tx.t("Pausiert bei ", "Paused at ") else "") + "${(frac * 100).toInt()} %  ·  " + sizes
         findViewById<TextView>(R.id.tvDlNote).text = DownloadBus.note
-        findViewById<MaterialButton>(R.id.btnDlPause).text = if (st == DlState.RUNNING) "Pausieren" else "Fortsetzen"
+        findViewById<MaterialButton>(R.id.btnDlPause).text = if (st == DlState.RUNNING) Tx.t("Pausieren", "Pause") else Tx.t("Fortsetzen", "Resume")
         findViewById<View>(R.id.btnDlDiscard).visibility = if (st == DlState.PAUSED) View.VISIBLE else View.GONE
     }
 
@@ -640,13 +684,13 @@ class MainActivity : AppCompatActivity() {
         val clear = findViewById<MaterialButton>(R.id.btnMapClear)
         if (running) {
             findViewById<TextView>(R.id.tvMapFile).text = ImportBus.fileName
-            findViewById<TextView>(R.id.tvMapStep).text = "Schritt ${ImportBus.step} von ${ImportBus.steps}: ${ImportBus.stepText}"
+            findViewById<TextView>(R.id.tvMapStep).text = Tx.t("Schritt ${ImportBus.step} von ${ImportBus.steps}: ${ImportBus.stepText}", "Step ${ImportBus.step} of ${ImportBus.steps}: ${ImportBus.stepText}")
             findViewById<com.google.android.material.progressindicator.LinearProgressIndicator>(R.id.barMap)
                 .setProgressCompat((ImportBus.fraction * 1000).toInt().coerceIn(0, 1000), false)
             findViewById<TextView>(R.id.tvMapPercent).text = "${(ImportBus.fraction * 100).toInt().coerceIn(0, 100)} %"
             findViewById<TextView>(R.id.tvMapEta).text = ImportBus.eta
             findViewById<TextView>(R.id.tvMapTiles).text =
-                if (ImportBus.tiles > 0) String.format(java.util.Locale.GERMANY, "%,d Kacheln fertig", ImportBus.tiles) else ""
+                if (ImportBus.tiles > 0) String.format(Tx.loc(), Tx.t("%,d Kacheln fertig", "%,d tiles done"), ImportBus.tiles) else ""
             stat.visibility = View.GONE; sub.visibility = View.GONE; clear.visibility = View.GONE
             findViewById<View>(R.id.btnInfoMap).visibility = View.GONE
             findViewById<View>(R.id.tvMapStale).visibility = View.GONE
@@ -665,17 +709,17 @@ class MainActivity : AppCompatActivity() {
                 if (ImportBus.running) return@runOnUiThread
                 val log = io.github.th3s1nc.osmandhudbridge.limit.ImportLog.parse(prefs.getString(BridgeService.KEY_IMPORT_LOG, null))
                 val st = findViewById<TextView>(R.id.tvStoreStat)
-                val nl = java.util.Locale.GERMANY
-                st.text = String.format(nl, "Kacheln: %,d (%,d importiert, %,d online geladen)\nBelegt: %,.0f MB", tilesAll, n, (tilesAll - n).coerceAtLeast(0), bytesAll / 1_048_576.0) +
-                    (if (log.isEmpty()) "" else "\n\nAus den Importen:\n" + io.github.th3s1nc.osmandhudbridge.limit.ImportLog.total(log).describe())
+                val nl = Tx.loc()
+                st.text = String.format(nl, Tx.t("Kacheln: %,d (%,d importiert, %,d online geladen)\nBelegt: %,.0f MB", "Tiles: %,d (%,d imported, %,d loaded online)\nUsed: %,.0f MB"), tilesAll, n, (tilesAll - n).coerceAtLeast(0), bytesAll / 1_048_576.0) +
+                    (if (log.isEmpty()) "" else Tx.t("\n\nAus den Importen:\n", "\n\nFrom the imports:\n") + io.github.th3s1nc.osmandhudbridge.limit.ImportLog.total(log).describe())
                 val stale = findViewById<TextView>(R.id.tvMapStale)
                 val hint = if (n == 0) null else io.github.th3s1nc.osmandhudbridge.limit.ImportLog.staleHint(log, java.time.LocalDate.now())
                 stale.text = hint ?: ""
                 stale.visibility = if (hint == null) View.GONE else View.VISIBLE
                 val info = prefs.getString(BridgeService.KEY_IMPORT_INFO, null)
-                stat.text = ImportBus.message ?: if (n == 0) "Noch keine Straßendaten importiert" else (info ?: String.format(java.util.Locale.GERMANY, "%,d Kacheln importiert", n))
-                val subText = if (n == 0) "" else String.format(java.util.Locale.GERMANY, "%,d importierte Kacheln gespeichert", n) +
-                    (prefs.getString(BridgeService.KEY_IMPORT_SUB, null)?.let { "\n$it" } ?: "")
+                stat.text = ImportBus.message ?: if (n == 0) Tx.t("Noch keine Straßendaten importiert", "No road data imported yet") else (info?.let { StatusText.stored(it) } ?: String.format(Tx.loc(), Tx.t("%,d Kacheln importiert", "%,d tiles imported"), n))
+                val subText = if (n == 0) "" else String.format(Tx.loc(), Tx.t("%,d importierte Kacheln gespeichert", "%,d imported tiles saved"), n) +
+                    (prefs.getString(BridgeService.KEY_IMPORT_SUB, null)?.let { "\n" + StatusText.stored(it) } ?: "")
                 sub.text = subText
                 sub.visibility = if (subText.isEmpty()) View.GONE else View.VISIBLE
                 clear.visibility = if (n > 0) View.VISIBLE else View.GONE
@@ -687,9 +731,12 @@ class MainActivity : AppCompatActivity() {
         if (BridgeService.running) BridgeService.send(this, BridgeService.ACTION_CONFIG)
     }
 
-    private val monthNames = listOf("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember")
+    private val monthNames: List<String> get() = if (Tx.en)
+        listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+    else listOf("Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember")
 
-    private fun dateText(d: java.time.LocalDate) = "${d.dayOfMonth}. ${monthNames[d.monthValue - 1]}"
+    private fun dateText(d: java.time.LocalDate) =
+        if (Tx.en) "${monthNames[d.monthValue - 1]} ${d.dayOfMonth}" else "${d.dayOfMonth}. ${monthNames[d.monthValue - 1]}"
 
     /** Karte "Saison" (Werkzeuge): Schalter, Beginn- und Ende-Monat. */
     private fun setupSeason() {
@@ -699,8 +746,8 @@ class MainActivity : AppCompatActivity() {
         val btnTo = findViewById<MaterialButton>(R.id.btnSeasonTo)
         fun ui() {
             box.visibility = if (sw.isChecked) View.VISIBLE else View.GONE
-            btnFrom.text = "Beginn: " + monthNames[prefs.getInt(BridgeService.KEY_SEASON_FROM, 3).coerceIn(1, 12) - 1]
-            btnTo.text = "Ende: " + monthNames[prefs.getInt(BridgeService.KEY_SEASON_TO, 10).coerceIn(1, 12) - 1]
+            btnFrom.text = Tx.t("Beginn: ", "Start: ") + monthNames[prefs.getInt(BridgeService.KEY_SEASON_FROM, 3).coerceIn(1, 12) - 1]
+            btnTo.text = Tx.t("Ende: ", "End: ") + monthNames[prefs.getInt(BridgeService.KEY_SEASON_TO, 10).coerceIn(1, 12) - 1]
         }
         fun changed() {
             if (BridgeService.running) BridgeService.send(this, BridgeService.ACTION_CONFIG)
@@ -724,11 +771,11 @@ class MainActivity : AppCompatActivity() {
                     ui()
                     changed()
                 }
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(Tx.t("Abbrechen", "Cancel"), null)
                 .show()
         }
-        btnFrom.setOnClickListener { pickMonth("Saisonbeginn (erster Tag des Monats)", BridgeService.KEY_SEASON_FROM, 3) }
-        btnTo.setOnClickListener { pickMonth("Saisonende (letzter Tag des Monats)", BridgeService.KEY_SEASON_TO, 10) }
+        btnFrom.setOnClickListener { pickMonth(Tx.t("Saisonbeginn (erster Tag des Monats)", "Season start (first day of the month)"), BridgeService.KEY_SEASON_FROM, 3) }
+        btnTo.setOnClickListener { pickMonth(Tx.t("Saisonende (letzter Tag des Monats)", "Season end (last day of the month)"), BridgeService.KEY_SEASON_TO, 10) }
     }
 
     private fun setupSettings() {
@@ -759,7 +806,7 @@ class MainActivity : AppCompatActivity() {
         val txtBatt = findViewById<TextView>(R.id.txtBattPct)
         val pct = prefs.getInt(BridgeService.KEY_BATT_PCT, io.github.th3s1nc.osmandhudbridge.limit.BatteryWarn.DEFAULT_PERCENT).coerceIn(5, 50) / 5 * 5
         sldBatt.value = pct.toFloat()
-        txtBatt.text = "Warnen ab: $pct %"
+        txtBatt.text = Tx.t("Warnen ab: $pct %", "Warn at: $pct %")
         swBatt.isChecked = prefs.getBoolean(BridgeService.KEY_BATT_WARN, false)
         sldBatt.isEnabled = swBatt.isChecked
         txtBatt.alpha = if (swBatt.isChecked) 1f else 0.5f
@@ -770,7 +817,7 @@ class MainActivity : AppCompatActivity() {
             applyConfigIfRunning()
         }
         sldBatt.addOnChangeListener { _, value, fromUser ->
-            txtBatt.text = "Warnen ab: ${value.toInt()} %"
+            txtBatt.text = Tx.t("Warnen ab: ${value.toInt()} %", "Warn at: ${value.toInt()} %")
             if (fromUser) {
                 prefs.edit().putInt(BridgeService.KEY_BATT_PCT, value.toInt()).apply()
                 applyConfigIfRunning()
@@ -815,7 +862,7 @@ class MainActivity : AppCompatActivity() {
         val tvCacheName = findViewById<TextView>(R.id.tvCacheName)
         fun cacheUi(i: Int) {
             val mb = cacheValues[i]
-            tvCacheName.text = if (mb < 1024) (if (mb == 256) "0,25 GB" else "0,5 GB") else "${mb / 1024} GB"
+            tvCacheName.text = if (mb < 1024) (if (mb == 256) Tx.t("0,25 GB", "0.25 GB") else Tx.t("0,5 GB", "0.5 GB")) else "${mb / 1024} GB"
         }
         val savedCache = prefs.getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB)
         val cacheIdx = cacheValues.indexOfFirst { it >= savedCache }.takeIf { it >= 0 } ?: (cacheValues.size - 1)
@@ -833,14 +880,14 @@ class MainActivity : AppCompatActivity() {
 
         // Blitzer-Liste (eigene GPX-Dateien)
         findViewById<MaterialButton>(R.id.btnCamPick).setOnClickListener {
-            try { pickCamList.launch(arrayOf("*/*")) } catch (_: Exception) { Toast.makeText(this, "Keine Dateiauswahl verfügbar", Toast.LENGTH_LONG).show() }
+            try { pickCamList.launch(arrayOf("*/*")) } catch (_: Exception) { Toast.makeText(this, Tx.t("Keine Dateiauswahl verfügbar", "No file picker available"), Toast.LENGTH_LONG).show() }
         }
         findViewById<MaterialButton>(R.id.btnCamClear).setOnClickListener {
             io.github.th3s1nc.osmandhudbridge.limit.CameraStore.clear(filesDir)
             prefs.edit().remove(BridgeService.KEY_CAM_LIST_COUNT).remove(BridgeService.KEY_CAM_LIST_FILES).apply()
             refreshCamList()
             applyConfigIfRunning()
-            Toast.makeText(this, "Blitzer-Liste entfernt", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, Tx.t("Blitzer-Liste entfernt", "Camera list removed"), Toast.LENGTH_SHORT).show()
         }
         for ((id, key) in listOf(R.id.swCamRed to BridgeService.KEY_CAM_RED, R.id.swCamSection to BridgeService.KEY_CAM_SECTION, R.id.swCamTunnel to BridgeService.KEY_CAM_TUNNEL)) {
             val sw = findViewById<MaterialSwitch>(id)
@@ -865,8 +912,8 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<View>(R.id.btnInfoDlMobile).setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Mobile Daten")
-                .setMessage("Aus: Die Region wird nur im WLAN geladen. Fällt das WLAN weg, pausiert der Download.\n\nAn: Ohne WLAN lädt die App über Mobilfunk weiter, ohne dass du etwas tun musst, und verbindet sich bei Funklöchern von selbst neu. Sobald wieder WLAN da ist, wechselt sie zurück ins WLAN.\n\nDas verbraucht Datenvolumen deines Mobilfunkvertrags. Eine Region hat meist einige hundert Megabyte; die genaue Größe siehst du vor dem Start. Den Schalter kannst du jederzeit umlegen, auch während des Downloads.")
+                .setTitle(Tx.t("Mobile Daten", "Mobile data"))
+                .setMessage(Tx.t("Aus: Die Region wird nur im WLAN geladen. Fällt das WLAN weg, pausiert der Download.\n\nAn: Ohne WLAN lädt die App über Mobilfunk weiter, ohne dass du etwas tun musst, und verbindet sich bei Funklöchern von selbst neu. Sobald wieder WLAN da ist, wechselt sie zurück ins WLAN.\n\nDas verbraucht Datenvolumen deines Mobilfunkvertrags. Eine Region hat meist einige hundert Megabyte; die genaue Größe siehst du vor dem Start. Den Schalter kannst du jederzeit umlegen, auch während des Downloads.", "Off: the region is only loaded over Wi-Fi. If Wi-Fi is lost, the download pauses.\n\nOn: without Wi-Fi the app continues over mobile data without you doing anything and reconnects by itself in dead spots. As soon as Wi-Fi is back, it switches back to Wi-Fi.\n\nThis uses data from your mobile plan. A region is usually a few hundred megabytes; you see the exact size before the start. You can flip the switch at any time, also during the download."))
                 .setPositiveButton("OK", null)
                 .show()
         }
@@ -877,31 +924,31 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<MaterialButton>(R.id.btnDlDiscard).setOnClickListener { regionLoader.discard() }
         findViewById<MaterialButton>(R.id.btnMapPick).setOnClickListener {
-            try { pickMap.launch(arrayOf("*/*")) } catch (_: Exception) { Toast.makeText(this, "Keine Dateiauswahl verfügbar", Toast.LENGTH_LONG).show() }
+            try { pickMap.launch(arrayOf("*/*")) } catch (_: Exception) { Toast.makeText(this, Tx.t("Keine Dateiauswahl verfügbar", "No file picker available"), Toast.LENGTH_LONG).show() }
         }
         findViewById<View>(R.id.btnInfoMap).setOnClickListener {
             val log = io.github.th3s1nc.osmandhudbridge.limit.ImportLog.parse(prefs.getString(BridgeService.KEY_IMPORT_LOG, null))
             AlertDialog.Builder(this)
-                .setTitle("Was wurde importiert?")
+                .setTitle(Tx.t("Was wurde importiert?", "What was imported?"))
                 .setMessage(io.github.th3s1nc.osmandhudbridge.limit.ImportLog.describe(log))
                 .setPositiveButton("OK", null)
                 .show()
         }
-        findViewById<MaterialButton>(R.id.btnMapCancel).setOnClickListener { ImportBus.cancel = true; Toast.makeText(this, "Wird abgebrochen …", Toast.LENGTH_SHORT).show() }
+        findViewById<MaterialButton>(R.id.btnMapCancel).setOnClickListener { ImportBus.cancel = true; Toast.makeText(this, Tx.t("Wird abgebrochen …", "Cancelling …"), Toast.LENGTH_SHORT).show() }
         findViewById<MaterialButton>(R.id.btnMapClear).setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Importierte Daten entfernen?")
-                .setMessage("Alle aus einer Datei importierten Kacheln werden gelöscht. Online geladene Kacheln bleiben.")
-                .setPositiveButton("Entfernen") { _, _ ->
+                .setTitle(Tx.t("Importierte Daten entfernen?", "Remove imported data?"))
+                .setMessage(Tx.t("Alle aus einer Datei importierten Kacheln werden gelöscht. Online geladene Kacheln bleiben.", "All tiles imported from a file will be deleted. Tiles loaded online stay."))
+                .setPositiveButton(Tx.t("Entfernen", "Remove")) { _, _ ->
                     val app = applicationContext
                     Thread {
                         val n = io.github.th3s1nc.osmandhudbridge.limit.PbfImport.removeImported(io.github.th3s1nc.osmandhudbridge.limit.TileStore.dir(app))
                         prefs.edit().remove(BridgeService.KEY_IMPORT_INFO).remove(BridgeService.KEY_IMPORT_SUB).remove(BridgeService.KEY_IMPORT_LOG).apply()
                         ImportBus.message = null
-                        runOnUiThread { Toast.makeText(this, "$n Kacheln entfernt", Toast.LENGTH_SHORT).show(); refreshMap(); applyConfigIfRunning() }
+                        runOnUiThread { Toast.makeText(this, Tx.t("$n Kacheln entfernt", "$n tiles removed"), Toast.LENGTH_SHORT).show(); refreshMap(); applyConfigIfRunning() }
                     }.start()
                 }
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(Tx.t("Abbrechen", "Cancel"), null)
                 .show()
         }
         fun applyKeepScreen(on: Boolean) {
@@ -919,7 +966,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.btnInfoKeepScreen).setOnClickListener {
             AlertDialog.Builder(this)
                 .setTitle("Stay awake")
-                .setMessage("Der Bildschirm bleibt an, solange diese App vorne offen ist. So siehst du bei einer Testfahrt dauernd Schild, Straße und Tempo.\n\nWenn du eine andere App öffnest (z. B. OSMAnd), gilt wieder die normale Zeit. Die Warnungen laufen im Hintergrund trotzdem weiter.\n\nKostet viel Akku und belastet den Bildschirm: am besten nur mit Ladekabel.")
+                .setMessage(Tx.t("Der Bildschirm bleibt an, solange diese App vorne offen ist. So siehst du bei einer Testfahrt dauernd Schild, Straße und Tempo.\n\nWenn du eine andere App öffnest (z. B. OSMAnd), gilt wieder die normale Zeit. Die Warnungen laufen im Hintergrund trotzdem weiter.\n\nKostet viel Akku und belastet den Bildschirm: am besten nur mit Ladekabel.", "The screen stays on as long as this app is open in the foreground. On a test drive you can keep seeing sign, street and speed.\n\nIf you open another app (e.g. OSMAnd), the normal screen timeout applies again. The warnings keep running in the background anyway.\n\nUses a lot of battery and strains the screen: best only with a charging cable."))
                 .setPositiveButton("OK", null)
                 .show()
         }
@@ -928,7 +975,7 @@ class MainActivity : AppCompatActivity() {
             setOnCheckedChangeListener { _, on ->
                 prefs.edit().putBoolean(BridgeService.KEY_CAR_MODE, on).apply()
                 applyConfigIfRunning()
-                if (on) Toast.makeText(this@MainActivity, "Auto-Modus an: GPS jede Sekunde, alle Töne aktiv. Braucht mehr Akku.", Toast.LENGTH_LONG).show()
+                if (on) Toast.makeText(this@MainActivity, Tx.t("Auto-Modus an: GPS jede Sekunde, alle Töne aktiv. Braucht mehr Akku.", "Car mode on: GPS every second, all tones active. Uses more battery."), Toast.LENGTH_LONG).show()
             }
         }
         findViewById<MaterialSwitch>(R.id.swOffline).apply {
@@ -937,7 +984,7 @@ class MainActivity : AppCompatActivity() {
                 prefs.edit().putBoolean(BridgeService.KEY_OFFLINE, on).apply()
                 applyConfigIfRunning()
                 if (on && prefs.getString(BridgeService.KEY_IMPORT_INFO, null) == null) {
-                    Toast.makeText(this@MainActivity, "Hinweis: Es sind nur die schon gespeicherten Kacheln da. Importiere zuerst Straßendaten.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this@MainActivity, Tx.t("Hinweis: Es sind nur die schon gespeicherten Kacheln da. Importiere zuerst Straßendaten.", "Note: only the tiles already saved are there. Import road data first."), Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -958,7 +1005,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupInfo() {
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { null }
-        findViewById<android.widget.TextView>(R.id.tvVersion).text = "Version ${version ?: "?"} · inoffiziell, privat und ohne Gewähr"
+        findViewById<android.widget.TextView>(R.id.tvVersion).text = Tx.t("Version ${version ?: "?"} · inoffiziell, privat und ohne Gewähr", "Version ${version ?: "?"} · unofficial, private, no warranty")
         findViewById<android.widget.TextView>(R.id.tvAbout).text = getString(R.string.about_intro)
         findViewById<android.widget.TextView>(R.id.tvLiability).text = getString(R.string.about_liability)
         findViewById<android.widget.TextView>(R.id.tvPrivacy).text = getString(R.string.about_privacy)
@@ -982,7 +1029,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btnLog).setOnClickListener { shareLog() }
         findViewById<MaterialButton>(R.id.btnLogClear).setOnClickListener {
             BridgeBus.clearLog()
-            Toast.makeText(this, "Log gelöscht", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, Tx.t("Log gelöscht", "Log cleared"), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -990,7 +1037,7 @@ class MainActivity : AppCompatActivity() {
 
     private var cacheStatsAt = 0L
     private var cacheStatsBusy = false
-    private var cacheStatsText = "Belegt: wird berechnet …"
+    private var cacheStatsText = Tx.t("Belegt: wird berechnet …", "Used: calculating …")
 
     /** Belegten Kartenspeicher höchstens alle 15 s im Hintergrund zählen (bei vielen Dateien dauert das etwas). */
     private fun updateCacheUsed() {
@@ -1003,8 +1050,8 @@ class MainActivity : AppCompatActivity() {
         Thread {
             val (n, bytes) = try { io.github.th3s1nc.osmandhudbridge.limit.TileCache(dir).stats() } catch (_: Exception) { 0 to 0L }
             val mb = bytes / (1024.0 * 1024.0)
-            val txt = "Belegt: " + (if (mb >= 1024) String.format(java.util.Locale.GERMANY, "%.1f GB", mb / 1024) else String.format(java.util.Locale.GERMANY, "%.0f MB", mb)) +
-                ", $n Kacheln"
+            val txt = Tx.t("Belegt: ", "Used: ") + (if (mb >= 1024) String.format(Tx.loc(), "%.1f GB", mb / 1024) else String.format(Tx.loc(), "%.0f MB", mb)) +
+                Tx.t(", $n Kacheln", ", $n tiles")
             runOnUiThread {
                 cacheStatsText = txt; cacheStatsBusy = false
                 findViewById<TextView>(R.id.tvCacheUsed)?.text = txt // sofort anzeigen, nicht erst beim nächsten Auffrischen
@@ -1014,12 +1061,12 @@ class MainActivity : AppCompatActivity() {
 
     /** Kurzer Status für die Live-Karte, Einzelheiten stehen im Protokoll. */
     private fun osmStatus(raw: String): String = when {
-        raw.contains("aus") && raw.startsWith("OSMAnd: aus") -> "Aus"
-        raw.contains("nicht freigegeben") -> "Nicht freigegeben (siehe Protokoll)"
-        raw.contains("Anmeldung fehlgeschlagen") -> "Anmeldung fehlgeschlagen"
-        raw.contains("verbunden (") || raw.contains("liefert nichts") || raw.contains("Ansagen nicht verfügbar") -> "Verbunden"
-        raw.contains("verbinde") -> "Verbinde …"
-        raw.contains("verloren") || raw.contains("Binding beendet") || raw.contains("nicht erreichbar") || raw.contains("keine Antwort") -> "Nicht verbunden"
+        raw.contains("aus") && raw.startsWith("OSMAnd: aus") -> Tx.t("Aus", "Off")
+        raw.contains("nicht freigegeben") -> Tx.t("Nicht freigegeben (siehe Protokoll)", "Not enabled (see log)")
+        raw.contains("Anmeldung fehlgeschlagen") -> Tx.t("Anmeldung fehlgeschlagen", "Registration failed")
+        raw.contains("verbunden (") || raw.contains("liefert nichts") || raw.contains("Ansagen nicht verfügbar") -> Tx.t("Verbunden", "Connected")
+        raw.contains("verbinde") -> Tx.t("Verbinde …", "Connecting …")
+        raw.contains("verloren") || raw.contains("Binding beendet") || raw.contains("nicht erreichbar") || raw.contains("keine Antwort") -> Tx.t("Nicht verbunden", "Not connected")
         else -> "–"
     }
 
@@ -1032,14 +1079,14 @@ class MainActivity : AppCompatActivity() {
         val granted = try {
             androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         } catch (_: Exception) { false }
-        tv.text = if (granted) "Benachrichtigungen kommen nicht an: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen, dann den Zugriff für diese App aus- und wieder einschalten."
-        else "Benachrichtigungszugriff fehlt: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen und den Zugriff erlauben."
+        tv.text = if (granted) Tx.t("Benachrichtigungen kommen nicht an: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen, dann den Zugriff für diese App aus- und wieder einschalten.", "Notifications do not arrive: speed, remaining time and arrival from OSMAnd are missing. Tap here, then switch access for this app off and on again.")
+        else Tx.t("Benachrichtigungszugriff fehlt: Tempo, Restzeit und Ankunft aus OSMAnd fehlen. Hier tippen und den Zugriff erlauben.", "Notification access is missing: speed, remaining time and arrival from OSMAnd are missing. Tap here and allow access.")
         tv.visibility = View.VISIBLE
     }
 
     /** Nur die Live-Werte (Tempo, Limit, Straße, Log): läuft jede Sekunde, solange die App offen ist. */
     private fun refreshLive() {
-        fun plain(t: String) = t.substringAfter(": ", t)
+        fun plain(t: String) = StatusText.en(t).let { it.substringAfter(": ", it) }
         tvGps.text = plain(BridgeBus.gps)
         tvLimit.text = plain(BridgeBus.limit)
         tvOsm.text = osmStatus(BridgeBus.osm)
@@ -1048,15 +1095,15 @@ class MainActivity : AppCompatActivity() {
         val tvSignValue = findViewById<TextView>(R.id.tvSignValue)
         tvSignValue.text = limKmh ?: "–"
         findViewById<TextView>(R.id.tvSignSource).text = when {
-            limKmh == null -> if (limRaw.contains("unbekannt")) "Unbekannt" else plain(limRaw)
-            limRaw.contains("geschätzt") -> "Geschätzt, nicht aus den Kartendaten"
-            else -> "Aus den Kartendaten (OSM)"
+            limKmh == null -> if (limRaw.contains("unbekannt")) Tx.t("Unbekannt", "Unknown") else plain(limRaw)
+            limRaw.contains("geschätzt") -> Tx.t("Geschätzt, nicht aus den Kartendaten", "Estimated, not from the map data")
+            else -> Tx.t("Aus den Kartendaten (OSM)", "From the map data (OSM)")
         }
         val spd = Regex("Tempo: (\\d+) km/h").find(BridgeBus.gps)?.groupValues?.get(1)
-        findViewById<TextView>(R.id.tvSignStreet).text = "Straße: " + (BridgeBus.street?.takeIf { it.isNotBlank() } ?: "–")
-        findViewById<TextView>(R.id.tvSignSpeed).text = "Tempo: " + (spd?.let { "$it km/h" } ?: "–")
-        findViewById<TextView>(R.id.tvLogHome).text = BridgeBus.lastLinesNewestFirst(3).ifBlank { "–" }
-        tvLog.text = BridgeBus.lastLinesNewestFirst(25)
+        findViewById<TextView>(R.id.tvSignStreet).text = Tx.t("Straße: ", "Street: ") + (BridgeBus.street?.takeIf { it.isNotBlank() } ?: "–")
+        findViewById<TextView>(R.id.tvSignSpeed).text = Tx.t("Tempo: ", "Speed: ") + (spd?.let { "$it km/h" } ?: "–")
+        findViewById<TextView>(R.id.tvLogHome).text = StatusText.en(BridgeBus.lastLinesNewestFirst(3)).ifBlank { "–" }
+        tvLog.text = StatusText.en(BridgeBus.lastLinesNewestFirst(25))
     }
 
     private fun refresh() {
@@ -1071,14 +1118,14 @@ class MainActivity : AppCompatActivity() {
             val plan = BridgeService.seasonPlan(prefs)
             val today = java.time.LocalDate.now()
             when (season) {
-                io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.IN_SEASON -> "Gerade ist Saison, die App läuft normal."
-                else -> "Die App ruht, Saisonbeginn am " + (plan.nextStart(today)?.let { dateText(it) } ?: "–") + "."
+                io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.IN_SEASON -> Tx.t("Gerade ist Saison, die App läuft normal.", "It is season now, the app runs normally.")
+                else -> Tx.t("Die App ruht, Saisonbeginn am ", "The app rests, season starts on ") + (plan.nextStart(today)?.let { dateText(it) } ?: "–") + "."
             }
         }
         scanCamerasIfDue()
-        findViewById<TextView>(R.id.tvCameraStat).text = "Blitzer (nur feste, aus OpenStreetMap): " +
-            (if (BridgeService.running) BridgeBus.cameras else "– (Dienst läuft nicht)") +
-            "\nAlle gespeicherten Kacheln: " + BridgeBus.camerasAll
+        findViewById<TextView>(R.id.tvCameraStat).text = Tx.t("Blitzer (nur feste, aus OpenStreetMap): ", "Speed cameras (fixed only, from OpenStreetMap): ") +
+            (if (BridgeService.running) BridgeBus.cameras else Tx.t("– (Dienst läuft nicht)", "– (service not running)")) +
+            Tx.t("\nAlle gespeicherten Kacheln: ", "\nAll saved tiles: ") + BridgeBus.camerasAll
         // Kurzmeldung oben (englisch) und eine kurze Zeile darunter
         val failed = hud.contains("Fehler", true) || hud.contains("abgelehnt", true)
         tvHud.text = when {
@@ -1102,16 +1149,16 @@ class MainActivity : AppCompatActivity() {
             )
         )
         tvServiceHint.text = when {
-            !enabled -> "HUD frei für die Tilsberk-App"
+            !enabled -> Tx.t("HUD frei für die Tilsberk-App", "HUD free for the Tilsberk app")
             !inSeason -> {
                 val start = BridgeService.seasonPlan(prefs).nextStart(java.time.LocalDate.now())
-                "Start am " + (start?.let { dateText(it) } ?: "–")
+                Tx.t("Start am ", "Starts on ") + (start?.let { dateText(it) } ?: "–")
             }
             !hudOn -> ""
-            running && failed -> hud.replaceFirstChar { it.uppercase() }
-            running && hud.contains("bereit") -> "Läuft auch bei Display aus"
+            running && failed -> StatusText.en(hud).replaceFirstChar { it.uppercase() }
+            running && hud.contains("bereit") -> Tx.t("Läuft auch bei Display aus", "Also runs with the screen off")
             running -> ""
-            else -> "HUD verbinden einschalten"
+            else -> Tx.t("HUD verbinden einschalten", "Switch on Connect HUD")
         }
         tvServiceHint.visibility = if (tvServiceHint.text.isNullOrBlank()) View.GONE else View.VISIBLE
         updateCacheUsed()
@@ -1160,12 +1207,12 @@ class MainActivity : AppCompatActivity() {
                 this, Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            Toast.makeText(this, "Bluetooth-Berechtigung wird benötigt", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, Tx.t("Bluetooth-Berechtigung wird benötigt", "Bluetooth permission is required"), Toast.LENGTH_LONG).show()
             return
         }
         val adapter = getSystemService(BluetoothManager::class.java)?.adapter
         if (adapter == null || !adapter.isEnabled) {
-            Toast.makeText(this, "Bluetooth ist ausgeschaltet", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, Tx.t("Bluetooth ist ausgeschaltet", "Bluetooth is switched off"), Toast.LENGTH_LONG).show()
             return
         }
         val bonded = adapter.bondedDevices.orEmpty().toList()
@@ -1177,10 +1224,10 @@ class MainActivity : AppCompatActivity() {
                     prefs.edit().remove(BridgeService.KEY_ADDR).remove(BridgeService.KEY_NAME).apply()
                 }
                 val b = AlertDialog.Builder(this)
-                    .setTitle("Kein HUD gefunden")
-                    .setMessage("Schalte das HUD ein und koppel es in den Android-Bluetooth-Einstellungen. Es heißt meist \"TILS\" oder \"TILSBERK Head-Up Display\".")
+                    .setTitle(Tx.t("Kein HUD gefunden", "No HUD found"))
+                    .setMessage(Tx.t("Schalte das HUD ein und koppel es in den Android-Bluetooth-Einstellungen. Es heißt meist \"TILS\" oder \"TILSBERK Head-Up Display\".", "Switch the HUD on and pair it in the Android Bluetooth settings. It is usually called \"TILS\" or \"TILSBERK Head-Up Display\"."))
                     .setPositiveButton("OK", null)
-                if (bonded.isNotEmpty()) b.setNeutralButton("Alle gekoppelten Geräte zeigen") { _, _ -> pickDevice(bonded, true) }
+                if (bonded.isNotEmpty()) b.setNeutralButton(Tx.t("Alle gekoppelten Geräte zeigen", "Show all paired devices")) { _, _ -> pickDevice(bonded, true) }
                 b.show()
             }
             huds.size == 1 -> begin(huds[0])
@@ -1191,7 +1238,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("MissingPermission")
     private fun pickDevice(list: List<BluetoothDevice>, manual: Boolean = false) {
         AlertDialog.Builder(this)
-            .setTitle("Welches HUD?")
+            .setTitle(Tx.t("Welches HUD?", "Which HUD?"))
             .setItems(list.map { "${it.name ?: "?"} (${it.address})" }.toTypedArray()) { _, i -> begin(list[i], manual) }
             .show()
     }
@@ -1232,14 +1279,14 @@ class MainActivity : AppCompatActivity() {
     /** Kennzahlen als Text; Zeilen für Höhe, Limit und Schräglage nur, wenn es Werte dazu gibt. */
     private fun statsText(st: io.github.th3s1nc.osmandhudbridge.track.RideStats): String {
         val sb = StringBuilder()
-        sb.append("Strecke: ").append(RideFormat.distance(st.distanceM))
-        sb.append("\nIn Bewegung: ").append(RideFormat.duration(st.movingMs))
-        sb.append("\nGesamtzeit: ").append(RideFormat.duration(st.totalMs))
-        sb.append("\nØ Tempo: ").append(st.avgKmh).append(" km/h")
-        sb.append("\nHöchstes Tempo: ").append(st.maxKmh).append(" km/h")
-        if (st.hasEle) sb.append("\nAufstieg: ").append(st.ascentM).append(" m, Abstieg: ").append(st.descentM).append(" m")
-        if (st.hasLimit) sb.append("\nTempolimit überschritten: ").append(st.overCount).append(" Mal")
-        if (st.hasLean) sb.append("\nMax. Schräglage: ").append(st.maxLeanDeg).append("° (Schätzung)")
+        sb.append(Tx.t("Strecke: ", "Distance: ")).append(RideFormat.distance(st.distanceM))
+        sb.append(Tx.t("\nIn Bewegung: ", "\nMoving: ")).append(RideFormat.duration(st.movingMs))
+        sb.append(Tx.t("\nGesamtzeit: ", "\nTotal time: ")).append(RideFormat.duration(st.totalMs))
+        sb.append(Tx.t("\nØ Tempo: ", "\nAvg speed: ")).append(st.avgKmh).append(" km/h")
+        sb.append(Tx.t("\nHöchstes Tempo: ", "\nTop speed: ")).append(st.maxKmh).append(" km/h")
+        if (st.hasEle) sb.append(Tx.t("\nAufstieg: ", "\nAscent: ")).append(st.ascentM).append(Tx.t(" m, Abstieg: ", " m, descent: ")).append(st.descentM).append(" m")
+        if (st.hasLimit) sb.append(Tx.t("\nTempolimit überschritten: ", "\nSpeed limit exceeded: ")).append(st.overCount).append(Tx.t(" Mal", " times"))
+        if (st.hasLean) sb.append(Tx.t("\nMax. Schräglage: ", "\nMax lean angle: ")).append(st.maxLeanDeg).append(Tx.t("° (Schätzung)", "° (estimate)"))
         return sb.toString()
     }
 
@@ -1265,9 +1312,9 @@ class MainActivity : AppCompatActivity() {
         val s = TrackRecorder.session
         val chip = findViewById<TextView>(R.id.tvRecStatus)
         chip.text = when {
-            s == null -> "● BEREIT"
-            s.paused -> "● PAUSE"
-            else -> "● LÄUFT"
+            s == null -> Tx.t("● BEREIT", "● READY")
+            s.paused -> Tx.t("● PAUSE", "● PAUSED")
+            else -> Tx.t("● LÄUFT", "● RECORDING")
         }
         chip.setTextColor(if (s == null) 0xFFA8A8B0.toInt() else 0xFFFF7A00.toInt())
         chip.setBackgroundResource(if (s == null) R.drawable.bg_chip_idle else R.drawable.bg_chip_live)
@@ -1280,9 +1327,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             val st = s.stats()
             val kmh = s.points.lastOrNull()?.speedKmh?.toInt() ?: 0
-            live.text = RideFormat.duration(st.movingMs) + " in Bewegung · " + RideFormat.distance(st.distanceM) + " · " + kmh + " km/h"
+            live.text = RideFormat.duration(st.movingMs) + Tx.t(" in Bewegung · ", " moving · ") + RideFormat.distance(st.distanceM) + " · " + kmh + " km/h"
         }
-        findViewById<MaterialButton>(R.id.btnRec).text = if (s == null) "Aufzeichnung starten" else "Beenden"
+        findViewById<MaterialButton>(R.id.btnRec).text = if (s == null) Tx.t("Aufzeichnung starten", "Start recording") else Tx.t("Beenden", "Stop")
         for (id in listOf(R.id.swRecAlt, R.id.swRecLimit, R.id.swRecLean)) findViewById<View>(id).isEnabled = s == null
         findViewById<View>(R.id.tvRecBanner).visibility = if (s != null) View.VISIBLE else View.GONE
         updateRecLive(s)
@@ -1299,18 +1346,18 @@ class MainActivity : AppCompatActivity() {
         val st = s?.stats()
         val last = s?.points?.lastOrNull()
         show(R.id.swRecAlt, R.id.tvRecAltLive) {
-            (last?.ele?.let { "Jetzt " + Math.round(it) + " m" } ?: "Noch keine Höhe") +
-                " · Aufstieg " + (st?.ascentM ?: 0) + " m · Abstieg " + (st?.descentM ?: 0) + " m"
+            (last?.ele?.let { Tx.t("Jetzt ", "Now ") + Math.round(it) + " m" } ?: Tx.t("Noch keine Höhe", "No altitude yet")) +
+                Tx.t(" · Aufstieg ", " · ascent ") + (st?.ascentM ?: 0) + Tx.t(" m · Abstieg ", " m · descent ") + (st?.descentM ?: 0) + " m"
         }
         show(R.id.swRecLimit, R.id.tvRecLimitLive) {
-            (if ((last?.limitKmh ?: 0) > 0) "Limit " + last?.limitKmh + " km/h" else "Limit unbekannt") +
-                " · bisher " + (st?.overCount ?: 0) + " Mal überschritten"
+            (if ((last?.limitKmh ?: 0) > 0) "Limit " + last?.limitKmh + " km/h" else Tx.t("Limit unbekannt", "Limit unknown")) +
+                Tx.t(" · bisher ", " · so far ") + (st?.overCount ?: 0) + Tx.t(" Mal überschritten", " times exceeded")
         }
         show(R.id.swRecLean, R.id.tvRecLeanLive) {
             val l = last?.leanDeg
-            (if (l == null) "Unter 15 km/h keine Schätzung"
-            else "Jetzt " + Math.abs(Math.round(l)) + "°" + (if (Math.round(l) > 0) " rechts" else if (Math.round(l) < 0) " links" else "")) +
-                " · max. " + (st?.maxLeanDeg ?: 0) + "°"
+            (if (l == null) Tx.t("Unter 15 km/h keine Schätzung", "No estimate below 15 km/h")
+            else Tx.t("Jetzt ", "Now ") + Math.abs(Math.round(l)) + "°" + (if (Math.round(l) > 0) Tx.t(" rechts", " right") else if (Math.round(l) < 0) Tx.t(" links", " left") else "")) +
+                Tx.t(" · max. ", " · max ") + (st?.maxLeanDeg ?: 0) + "°"
         }
     }
 
@@ -1318,11 +1365,11 @@ class MainActivity : AppCompatActivity() {
         if (!TrackRecorder.active) {
             if (offerUnfinishedRide()) return
             if (!BridgeService.running) {
-                Toast.makeText(this, "Erst auf der Übersicht die App einschalten", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, Tx.t("Erst auf der Übersicht die App einschalten", "First switch the app on in the Overview"), Toast.LENGTH_LONG).show()
                 return
             }
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Ohne Standort-Erlaubnis geht keine Aufzeichnung", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, Tx.t("Ohne Standort-Erlaubnis geht keine Aufzeichnung", "Recording needs location permission"), Toast.LENGTH_LONG).show()
                 return
             }
             TrackRecorder.start(this)
@@ -1331,7 +1378,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             val points = TrackRecorder.finish()
             updateRecUi()
-            showSaveDialog(points, "Fahrt beenden")
+            showSaveDialog(points, Tx.t("Fahrt beenden", "End ride"))
         }
     }
 
@@ -1343,7 +1390,7 @@ class MainActivity : AppCompatActivity() {
             if (points.isNotEmpty()) RideStore.discardUnfinished(this)
             return false
         }
-        showSaveDialog(points, "Unterbrochene Fahrt gefunden")
+        showSaveDialog(points, Tx.t("Unterbrochene Fahrt gefunden", "Interrupted ride found"))
         return true
     }
 
@@ -1359,7 +1406,7 @@ class MainActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             setSingleLine()
             setText(RideStore.defaultName(st.startMs))
-            hint = "Name der Fahrt"
+            hint = Tx.t("Name der Fahrt", "Name of the ride")
         }
         box.addView(input)
         saveDialogs++
@@ -1367,29 +1414,29 @@ class MainActivity : AppCompatActivity() {
             .setTitle(title)
             .setView(box)
             .setCancelable(false)
-            .setPositiveButton("Speichern") { _, _ ->
+            .setPositiveButton(Tx.t("Speichern", "Save")) { _, _ ->
                 val name = input.text.toString().trim().ifEmpty { RideStore.defaultName(st.startMs) }
                 val ride = RideStore.save(this, name, points)
                 if (ride == null) {
-                    Toast.makeText(this, "Zu kurz zum Speichern", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, Tx.t("Zu kurz zum Speichern", "Too short to save"), Toast.LENGTH_LONG).show()
                     showSaveDialog(points, title)
                 } else {
                     Toast.makeText(
                         this,
-                        if (ride.publicUri != null) "Gespeichert, Kopie in Download/GPX-Tracking" else "Gespeichert (nur in der App)",
+                        if (ride.publicUri != null) Tx.t("Gespeichert, Kopie in Download/GPX-Tracking", "Saved, copy in Download/GPX-Tracking") else Tx.t("Gespeichert (nur in der App)", "Saved (in the app only)"),
                         Toast.LENGTH_LONG
                     ).show()
                     refreshRides()
                 }
             }
-            .setNegativeButton("Verwerfen") { _, _ -> confirmDiscard(points, title) }
-            .setNeutralButton("Weiter aufzeichnen") { _, _ ->
+            .setNegativeButton(Tx.t("Verwerfen", "Discard")) { _, _ -> confirmDiscard(points, title) }
+            .setNeutralButton(Tx.t("Weiter aufzeichnen", "Keep recording")) { _, _ ->
                 if (BridgeService.running) {
                     TrackRecorder.resume(this, points)
                     BridgeService.send(this, BridgeService.ACTION_CONFIG)
                     updateRecUi()
                 } else {
-                    Toast.makeText(this, "Erst auf der Übersicht die App einschalten", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, Tx.t("Erst auf der Übersicht die App einschalten", "First switch the app on in the Overview"), Toast.LENGTH_LONG).show()
                     showSaveDialog(points, title)
                 }
             }
@@ -1400,11 +1447,11 @@ class MainActivity : AppCompatActivity() {
     private fun confirmDiscard(points: List<io.github.th3s1nc.osmandhudbridge.track.TrackPoint>, title: String) {
         saveDialogs++
         AlertDialog.Builder(this)
-            .setTitle("Fahrt wirklich verwerfen?")
-            .setMessage("Die Aufzeichnung ist danach unwiderruflich weg.")
+            .setTitle(Tx.t("Fahrt wirklich verwerfen?", "Really discard the ride?"))
+            .setMessage(Tx.t("Die Aufzeichnung ist danach unwiderruflich weg.", "The recording will be gone for good."))
             .setCancelable(false)
-            .setPositiveButton("Ja, verwerfen") { _, _ -> RideStore.discardUnfinished(this) }
-            .setNegativeButton("Nein") { _, _ -> showSaveDialog(points, title) }
+            .setPositiveButton(Tx.t("Ja, verwerfen", "Yes, discard")) { _, _ -> RideStore.discardUnfinished(this) }
+            .setNegativeButton(Tx.t("Nein", "No")) { _, _ -> showSaveDialog(points, title) }
             .setOnDismissListener { saveDialogs-- }
             .show()
     }
@@ -1431,13 +1478,13 @@ class MainActivity : AppCompatActivity() {
         prev.setOnClickListener { if (idx > 0) { seasonYear = years[idx - 1]; refreshSeason(list) } }
         next.setOnClickListener { if (idx < years.size - 1) { seasonYear = years[idx + 1]; refreshSeason(list) } }
         findViewById<TextView>(R.id.tvSeasonRides).text = sum.rides.toString()
-        findViewById<TextView>(R.id.tvSeasonDist).text = String.format(java.util.Locale.GERMANY, "%,.0f km", sum.distanceM / 1000.0)
+        findViewById<TextView>(R.id.tvSeasonDist).text = String.format(Tx.loc(), "%,.0f km", sum.distanceM / 1000.0)
         findViewById<TextView>(R.id.tvSeasonTime).text = RideFormat.duration(sum.movingMs)
         findViewById<TextView>(R.id.tvSeasonMax).text = if (sum.rides == 0) "–" else "${sum.maxKmh} km/h"
         findViewById<TextView>(R.id.tvSeasonOver).text = when {
-            sum.rides == 0 -> "Keine Fahrten in dieser Saison."
-            sum.ridesWithLimit == 0 -> "Überschreitungen: keine Tempolimit-Daten aufgezeichnet."
-            else -> "Zu schnell: ${sum.overCount} Mal in ${sum.ridesWithOver} Fahrten"
+            sum.rides == 0 -> Tx.t("Keine Fahrten in dieser Saison.", "No rides this season.")
+            sum.ridesWithLimit == 0 -> Tx.t("Überschreitungen: keine Tempolimit-Daten aufgezeichnet.", "Overspeeding: no speed limit data recorded.")
+            else -> Tx.t("Zu schnell: ${sum.overCount} Mal in ${sum.ridesWithOver} Fahrten", "Too fast: ${sum.overCount} times in ${sum.ridesWithOver} rides")
         }
         val bars = findViewById<LinearLayout>(R.id.seasonBars)
         bars.removeAllViews()
@@ -1495,7 +1542,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun command(action: String) {
         if (!BridgeService.running) {
-            Toast.makeText(this, "Erst den Dienst starten", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, Tx.t("Erst den Dienst starten", "Start the service first"), Toast.LENGTH_SHORT).show()
             return
         }
         BridgeService.send(this, action)
@@ -1530,7 +1577,7 @@ class MainActivity : AppCompatActivity() {
     private fun shareLog() {
         val f = BridgeBus.logFile()
         if (f == null) {
-            Toast.makeText(this, "Noch kein Log vorhanden", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, Tx.t("Noch kein Log vorhanden", "No log yet"), Toast.LENGTH_SHORT).show()
             return
         }
         val uri = FileProvider.getUriForFile(this, "$packageName.logs", f)
@@ -1538,6 +1585,6 @@ class MainActivity : AppCompatActivity() {
             .setType("text/plain")
             .putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        startActivity(Intent.createChooser(send, "Log teilen"))
+        startActivity(Intent.createChooser(send, Tx.t("Log teilen", "Share log")))
     }
 }

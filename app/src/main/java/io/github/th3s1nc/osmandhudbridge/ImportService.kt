@@ -25,6 +25,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /** Stand des Imports der Straßendaten für die Oberfläche. */
 object ImportBus {
@@ -56,6 +57,8 @@ class ImportService : Service() {
     private var regionUrl: String? = null
     private var deleteAfter = false
 
+    override fun attachBaseContext(newBase: Context) { super.attachBaseContext(AppLang.wrap(newBase)) }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -63,7 +66,7 @@ class ImportService : Service() {
         val uri = intent?.data
         if (uri == null || ImportBus.running) {
             // Nach startForegroundService ist startForeground Pflicht, sonst stürzt die App ab
-            try { startFg(buildNotification("Straßendaten werden gelesen", (ImportBus.fraction * 100).toInt(), true)) } catch (_: Exception) { }
+            try { startFg(buildNotification(Tx.t("Straßendaten werden gelesen", "Reading road data"), (ImportBus.fraction * 100).toInt(), true)) } catch (_: Exception) { }
             if (!ImportBus.running) stopSelf()
             return START_NOT_STICKY
         }
@@ -72,10 +75,10 @@ class ImportService : Service() {
         regionUrl = intent?.getStringExtra(EXTRA_REGION_URL)
         deleteAfter = intent?.getBooleanExtra(EXTRA_DELETE_AFTER, false) ?: false
         val name = regionName ?: nameOf(uri)
-        ImportBus.apply { running = true; cancel = false; fileName = name; step = 1; fraction = 0.0; stepText = "Straßen suchen"; tiles = 0; eta = ""; message = null }
+        ImportBus.apply { running = true; cancel = false; fileName = name; step = 1; fraction = 0.0; stepText = Tx.t("Straßen suchen", "Searching roads"); tiles = 0; eta = ""; message = null }
         ImportBus.changed()
-        try { startFg(buildNotification("$name: wird gelesen", 0, true)) } catch (e: Exception) {
-            finish("Start nicht möglich (${e.message})")
+        try { startFg(buildNotification(Tx.t("$name: wird gelesen", "$name: reading"), 0, true)) } catch (e: Exception) {
+            finish(Tx.t("Start nicht möglich (${e.message})", "Cannot start (${e.message})"))
             return START_NOT_STICKY
         }
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -104,7 +107,7 @@ class ImportService : Service() {
                 val now = System.currentTimeMillis()
                 if (now - lastNotif > 1000) {
                     lastNotif = now
-                    val n = buildNotification("Schritt $step von $steps: $text", (fraction * 100).toInt(), true)
+                    val n = buildNotification(Tx.t("Schritt $step von $steps: $text", "Step $step of $steps: $text"), (fraction * 100).toInt(), true)
                     try { getSystemService(NotificationManager::class.java).notify(NOTIF_ID, n) } catch (_: Exception) { }
                 }
             }
@@ -112,10 +115,10 @@ class ImportService : Service() {
         }
         val outDir = TileStore.dir(this)
         val msg: String = try {
-            val r = PbfImport.run({ contentResolver.openInputStream(uri) ?: throw java.io.IOException("Datei nicht lesbar") }, size, outDir, File(cacheDir, "import_tmp"), listener)
+            val r = PbfImport.run({ contentResolver.openInputStream(uri) ?: throw java.io.IOException(Tx.t("Datei nicht lesbar", "File not readable")) }, size, outDir, File(cacheDir, "import_tmp"), listener)
             val date = SimpleDateFormat("dd.MM.yyyy", Locale.GERMANY).format(Date())
             val mb = r.bytes / 1_048_576.0
-            val info = String.format(Locale.GERMANY, "Fertig: %,d Kacheln, %,.0f MB (%d s)", r.tiles, mb, r.seconds)
+            val info = String.format(Locale.GERMANY, "Fertig: %,d Kacheln, %,.0f MB (%d s)", r.tiles, mb, r.seconds) // gespeichert deutsch, Anzeige übersetzt StatusText.stored
             val sp = getSharedPreferences(BridgeService.PREFS, Context.MODE_PRIVATE)
             sp.edit()
                 .putString(BridgeService.KEY_IMPORT_LOG, io.github.th3s1nc.osmandhudbridge.limit.ImportLog.add(
@@ -129,14 +132,14 @@ class ImportService : Service() {
             }
             val total = outDir.listFiles { f -> f.name.endsWith(".json") }?.sumOf { it.length() } ?: 0L
             val limit = getSharedPreferences(BridgeService.PREFS, Context.MODE_PRIVATE).getInt(BridgeService.KEY_CACHE_MB, BridgeService.DEFAULT_CACHE_MB).toLong() * 1_048_576L
-            BridgeBus.log("Import der Straßendaten: $name, ${r.tiles} Kacheln, ${r.ways} Straßen, ${r.points} Punkte, ${r.seconds} s")
-            if (total > limit) info + ". Achtung: mehr Daten als das Speicherlimit (Kartenspeicher), ältere Kacheln würden gelöscht. Erhöhe das Limit." else info
+            BridgeBus.log(Tx.t("Import der Straßendaten: $name, ${r.tiles} Kacheln, ${r.ways} Straßen, ${r.points} Punkte, ${r.seconds} s", "Road data import: $name, ${r.tiles} tiles, ${r.ways} roads, ${r.points} points, ${r.seconds} s"))
+            if (total > limit) info + Tx.t(". Achtung: mehr Daten als das Speicherlimit (Kartenspeicher), ältere Kacheln würden gelöscht. Erhöhe das Limit.", ". Warning: more data than the storage limit (map storage), older tiles would be deleted. Raise the limit.") else info
         } catch (_: ImportCancelled) {
-            "Abgebrochen. Was bis dahin fertig war, bleibt gespeichert."
+            Tx.t("Abgebrochen. Was bis dahin fertig war, bleibt gespeichert.", "Cancelled. What was finished until then stays saved.")
         } catch (e: Throwable) {
-            BridgeBus.log("Import der Straßendaten fehlgeschlagen: ${e.javaClass.simpleName}: ${e.message}")
-            if (e is OutOfMemoryError) "Zu wenig Arbeitsspeicher für diese Datei. Nimm eine kleinere Region (zum Beispiel einen Regierungsbezirk)."
-            else "Fehler: ${e.message ?: e.javaClass.simpleName}"
+            BridgeBus.log(Tx.t("Import der Straßendaten fehlgeschlagen: ${e.javaClass.simpleName}: ${e.message}", "Road data import failed: ${e.javaClass.simpleName}: ${e.message}"))
+            if (e is OutOfMemoryError) Tx.t("Zu wenig Arbeitsspeicher für diese Datei. Nimm eine kleinere Region (zum Beispiel einen Regierungsbezirk).", "Not enough memory for this file. Choose a smaller region (for example a district).")
+            else Tx.t("Fehler: ", "Error: ") + (e.message ?: e.javaClass.simpleName)
         }
         if (deleteAfter) { try { uri.path?.let { File(it).delete() } } catch (_: Exception) { } } // die große Datei wird nicht mehr gebraucht
         main.post { finish(msg) }
@@ -152,7 +155,7 @@ class ImportService : Service() {
             stopForeground(STOP_FOREGROUND_REMOVE)
             val done = NotificationCompat.Builder(this, CHANNEL)
                 .setSmallIcon(android.R.drawable.stat_sys_download_done)
-                .setContentTitle("Straßendaten importieren")
+                .setContentTitle(Tx.t("Straßendaten importieren", "Import road data"))
                 .setContentText(msg)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(msg))
                 .setAutoCancel(true)
@@ -166,16 +169,16 @@ class ImportService : Service() {
     }
 
     private fun etaText(sec: Double): String = when {
-        sec < 60 -> "noch weniger als 1 Minute"
-        sec < 3600 -> "noch ca. ${(sec / 60).toInt() + 1} Minuten"
-        else -> String.format(Locale.GERMANY, "noch ca. %.1f Stunden", sec / 3600)
+        sec < 60 -> Tx.t("noch weniger als 1 Minute", "less than 1 minute left")
+        sec < 3600 -> Tx.t("noch ca. ${(sec / 60).toInt() + 1} Minuten", "about ${(sec / 60).toInt() + 1} minutes left")
+        else -> String.format(Tx.loc(), Tx.t("noch ca. %.1f Stunden", "about %.1f hours left"), sec / 3600)
     }
 
     private fun nameOf(uri: Uri): String = try {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
-        } ?: (uri.lastPathSegment ?: "Datei")
-    } catch (_: Exception) { uri.lastPathSegment ?: "Datei" }
+        } ?: (uri.lastPathSegment ?: Tx.t("Datei", "File"))
+    } catch (_: Exception) { uri.lastPathSegment ?: Tx.t("Datei", "File") }
 
     private fun sizeOf(uri: Uri): Long = if (uri.scheme == "file") (uri.path?.let { File(it).length() } ?: 0L) else try {
         contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
@@ -190,7 +193,7 @@ class ImportService : Service() {
     private fun buildNotification(text: String, percent: Int, withCancel: Boolean): Notification {
         val b = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle("Straßendaten importieren")
+            .setContentTitle(Tx.t("Straßendaten importieren", "Import road data"))
             .setContentText(if (ImportBus.eta.isNotEmpty()) "$text · $percent % · ${ImportBus.eta}" else "$text · $percent %")
             .setProgress(100, percent, false)
             .setOngoing(true)
@@ -201,7 +204,7 @@ class ImportService : Service() {
                 this, 2, Intent(this, ImportService::class.java).setAction(ACTION_CANCEL),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
-            b.addAction(0, "Abbrechen", cancel)
+            b.addAction(0, Tx.t("Abbrechen", "Cancel"), cancel)
         }
         return b.build()
     }
@@ -209,7 +212,7 @@ class ImportService : Service() {
     private fun ensureChannel() {
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Straßendaten importieren", NotificationManager.IMPORTANCE_LOW))
+            nm.createNotificationChannel(NotificationChannel(CHANNEL, Tx.t("Straßendaten importieren", "Import road data"), NotificationManager.IMPORTANCE_LOW))
         }
     }
 

@@ -1,4 +1,5 @@
 package io.github.th3s1nc.osmandhudbridge.protocol
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Element-Test (Werkzeuge, Karte HUD): zeigt ein einzelnes Anzeige-Element des HUD kurz an, damit man am Gerät sieht,
@@ -69,6 +70,43 @@ object ElementTest {
     private const val F_VIA_DISTANCE = 24
     private const val F_ELEVATION_UP = 27
     private const val F_ELEVATION_DOWN = 28
+
+    private val nameEn = mapOf(
+        "Kompass" to "Compass",
+        "Pfeil" to "Arrow",
+        "Restdistanz" to "Remaining distance",
+        "Restzeit" to "Remaining time",
+        "Entfernung Abbiegung" to "Distance to turn",
+        "Nächste Straße" to "Next street",
+        "Tacho" to "Speedometer",
+        "Tacho-Balken" to "Speedometer bar",
+        "Tempo-Ziffer" to "Speed digits",
+        "Aktuelle Straße" to "Current street",
+        "Spurinfo" to "Lane info",
+        "Uhrzeit" to "Clock",
+        "Tempolimit" to "Speed limit",
+        "Ankunftszeit" to "Arrival time",
+        "Gefahrene Strecke" to "Distance traveled",
+        "Gefahrene Zeit" to "Time traveled",
+        "Anruf" to "Call",
+        "Nachricht" to "Message",
+        "Handy-Akku (Explorer)" to "Phone battery (Explorer)",
+        "Pfeil-Nummer" to "Arrow number",
+        "HUD-Akku" to "HUD battery",
+        "Entfernung Zwischenziel" to "Distance to waypoint",
+        "Höhe" to "Altitude",
+        "Höhenmeter aufwärts" to "Ascent",
+        "Höhenmeter abwärts" to "Descent",
+        "Abbiegepfeil" to "Turn arrow",
+        "Tempolimit-Schild" to "Speed limit sign",
+        "Blitzer-Symbol" to "Speed camera symbol",
+        "Entfernung Blitzer" to "Distance to speed camera",
+        "Höhenmeter" to "Elevation",
+        "Handy-Akku" to "Phone battery"
+    )
+
+    /** Name des Elements in der Sprache der App (Deutsch ist der Grundtext). */
+    fun tr(name: String): String = if (Tx.en) nameEn[name] ?: name else name
 
     fun find(code: Int): TestElement? = catalog.firstOrNull { it.code == code }
 

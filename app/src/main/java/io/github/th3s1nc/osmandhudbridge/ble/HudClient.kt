@@ -19,6 +19,7 @@ import io.github.th3s1nc.osmandhudbridge.protocol.HudProtocol
 import io.github.th3s1nc.osmandhudbridge.protocol.HudMessage
 import java.util.ArrayDeque
 import java.util.Calendar
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Robuste BLE-Verbindung zum HUD. Alles läuft auf dem Main-Thread.
@@ -107,7 +108,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
     fun send(msgs: List<HudMessage>): Boolean {
         if (state != State.READY || msgs.isEmpty()) return false
         if (msgQueue.size + msgs.size > MAX_QUEUE) {
-            BridgeBus.log("HUD-Warteschlange voll, Update zurückgestellt")
+            BridgeBus.log(Tx.t("HUD-Warteschlange voll, Update zurückgestellt", "HUD queue full, update postponed"))
             return false
         }
         for (m in msgs) msgQueue.addLast(Item(m))
@@ -119,7 +120,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
 
     private val retryRunnable = Runnable { connectNow() }
     private val connectTimeout = Runnable {
-        if (state == State.CONNECTING) failAndRetry("Zeitüberschreitung beim Verbinden")
+        if (state == State.CONNECTING) failAndRetry(Tx.t("Zeitüberschreitung beim Verbinden", "Timeout while connecting"))
     }
 
     private fun connectNow() {
@@ -261,7 +262,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
             failures = 0
             finishMessage(cur)
         } else {
-            BridgeBus.log("HUD: Nachricht abgelehnt (NACK), sende erneut")
+            BridgeBus.log(Tx.t("HUD: Nachricht abgelehnt (NACK), sende erneut", "HUD: message rejected (NACK), sending again"))
             attemptFailed()
         }
     }
@@ -294,7 +295,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
             val isLast = descQueue.isEmpty()
             descBusy = true
             val ok = try { op() } catch (e: Exception) {
-                BridgeBus.log("BLE-Fehler: ${e.message}"); false
+                BridgeBus.log(Tx.t("BLE-Fehler: ${e.message}", "BLE error: ${e.message}")); false
             }
             if (!ok) {
                 failAndRetry("Einrichtung fehlgeschlagen")
@@ -307,7 +308,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
     }
 
     private val descTimeout = Runnable {
-        BridgeBus.log("BLE: CCCD-Antwort ausgeblieben")
+        BridgeBus.log(Tx.t("BLE: CCCD-Antwort ausgeblieben", "BLE: no CCCD response"))
         descBusy = false
         pumpDescriptors()
     }
@@ -371,7 +372,7 @@ class HudClient(private val context: Context, private val listener: Listener) {
     }
 
     private val writeTimeout = Runnable {
-        BridgeBus.log("BLE: Schreibbestätigung ausgeblieben")
+        BridgeBus.log(Tx.t("BLE: Schreibbestätigung ausgeblieben", "BLE: no write confirmation"))
         attemptFailed()
     }
 

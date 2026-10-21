@@ -34,6 +34,7 @@ import io.github.th3s1nc.osmandhudbridge.ble.HudClient
 import io.github.th3s1nc.osmandhudbridge.nav.OsmAndClient
 import io.github.th3s1nc.osmandhudbridge.nav.OsmAndTurns
 import kotlin.math.roundToInt
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Foreground-Service: hält HUD-Verbindung, GPS-Tempo und OSMAnd-Anbindung am Leben,
@@ -74,6 +75,8 @@ class BridgeService : Service(), HudClient.Listener {
     private val sensors by lazy { SensorTracker(this) }
     private var music: io.github.th3s1nc.osmandhudbridge.nav.MusicWatcher? = null
 
+    override fun attachBaseContext(newBase: Context) { super.attachBaseContext(AppLang.wrap(newBase)) }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -109,12 +112,12 @@ class BridgeService : Service(), HudClient.Listener {
                 when {
                     code == TEST_END -> controller.endElementTest()
                     code == TEST_SHOW_MODE && intent.getStringExtra(EXTRA_MODE) == TEST_DANGER ->
-                        if (!controller.testShowScreen(TEST_DANGER_SCREEN)) BridgeBus.log("Element-Test: HUD nicht bereit")
+                        if (!controller.testShowScreen(TEST_DANGER_SCREEN)) BridgeBus.log(Tx.t("Element-Test: HUD nicht bereit", "Element test: HUD not ready"))
                     code == TEST_SHOW_MODE -> {
                         val m = io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode.fromName(intent.getStringExtra(EXTRA_MODE))
-                        if (!controller.testShowMode(m)) BridgeBus.log("Element-Test: HUD nicht bereit")
+                        if (!controller.testShowMode(m)) BridgeBus.log(Tx.t("Element-Test: HUD nicht bereit", "Element test: HUD not ready"))
                     }
-                    else -> if (!controller.testBlink(code)) BridgeBus.log("Element-Test: HUD nicht bereit")
+                    else -> if (!controller.testBlink(code)) BridgeBus.log(Tx.t("Element-Test: HUD nicht bereit", "Element test: HUD not ready"))
                 }
             }
             ACTION_RELOAD_TILES -> limitProvider.reloadTiles()
@@ -139,7 +142,7 @@ class BridgeService : Service(), HudClient.Listener {
             ServiceCompat.startForeground(this, NOTIF_ID, buildNotification(), type)
             true
         } catch (e: Exception) {
-            BridgeBus.log("Dienst-Start abgelehnt: ${e.message}")
+            BridgeBus.log(Tx.t("Dienst-Start abgelehnt: ${e.message}", "Service start refused: ${e.message}"))
             BridgeBus.hud = "HUD: Dienst konnte nicht starten (Berechtigungen?)"
             false
         }
@@ -197,7 +200,7 @@ class BridgeService : Service(), HudClient.Listener {
                 if (d != null && t != null && SystemClock.elapsedRealtime() - lastAidlNavAt > AIDL_SILENT_MS) {
                     if (!notifNavActive) {
                         notifNavActive = true
-                        BridgeBus.log("Pfeil aus OSMAnd-Benachrichtigung (Schnittstelle liefert nichts)")
+                        BridgeBus.log(Tx.t("Pfeil aus OSMAnd-Benachrichtigung (Schnittstelle liefert nichts)", "Arrow from OSMAnd notification (interface delivers nothing)"))
                     }
                     controller.setNav(d, t, info.roundaboutExit, extrapolate = false)
                 }
@@ -231,7 +234,7 @@ class BridgeService : Service(), HudClient.Listener {
             client.stop()
             try { wakeLock?.release() } catch (_: Exception) {}
             started = false
-            BridgeBus.log("Dienst beendet")
+            BridgeBus.log(Tx.t("Dienst beendet", "Service stopped"))
         }
         running = false
         BridgeBus.hud = "HUD: –"
@@ -271,7 +274,7 @@ class BridgeService : Service(), HudClient.Listener {
         val now = SystemClock.elapsedRealtime()
         if (idleSince == 0L) { idleSince = now; return false }
         if (now - idleSince < IDLE_STOP_MS) return false
-        BridgeBus.log("HUD seit ${IDLE_STOP_MS / 60_000} Minuten nicht verbunden -> Dienst beendet (beim nächsten Öffnen der App startet er wieder)")
+        BridgeBus.log(Tx.t("HUD seit ${IDLE_STOP_MS / 60_000} Minuten nicht verbunden -> Dienst beendet (beim nächsten Öffnen der App startet er wieder)", "HUD not connected for ${IDLE_STOP_MS / 60_000} minutes -> service stopped (it starts again the next time you open the app)"))
         stopSelf()
         return true
     }
@@ -284,7 +287,7 @@ class BridgeService : Service(), HudClient.Listener {
         if (lastSeasonCheck != 0L && now - lastSeasonCheck < 60_000L) return false
         lastSeasonCheck = now
         if (seasonState(getSharedPreferences(PREFS, MODE_PRIVATE)) == io.github.th3s1nc.osmandhudbridge.limit.SeasonPlan.State.IN_SEASON) return false
-        BridgeBus.log("Die Saison ist zu Ende, die App ruht bis zum nächsten Saisonbeginn")
+        BridgeBus.log(Tx.t("Die Saison ist zu Ende, die App ruht bis zum nächsten Saisonbeginn", "The season is over, the app rests until the next season starts"))
         stopping = true
         stopSelf()
         return true
@@ -342,7 +345,7 @@ class BridgeService : Service(), HudClient.Listener {
     }
 
     override fun onLinkLost() {
-        BridgeBus.log("Verbindung zum HUD verloren, versuche automatisch neu zu verbinden")
+        BridgeBus.log(Tx.t("Verbindung zum HUD verloren, versuche automatisch neu zu verbinden", "Connection to the HUD lost, trying to reconnect automatically"))
     }
 
     // ---------------- GPS ----------------
@@ -423,9 +426,9 @@ class BridgeService : Service(), HudClient.Listener {
             gpsMode = m
             BridgeBus.gps = if (m == io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.FAST) "GPS: warte auf Fix" else "GPS: Sparmodus (ohne HUD)"
             if (old != null) BridgeBus.log("GPS: " + when (m) {
-                io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.FAST -> "jede Sekunde (HUD verbunden)"
-                io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.MOVING -> "Sparmodus, alle 30 s (unterwegs ohne HUD)"
-                io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.IDLE -> "Sparmodus, alle 5 min (Stand ohne HUD)"
+                io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.FAST -> Tx.t("jede Sekunde (HUD verbunden)", "every second (HUD connected)")
+                io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.MOVING -> Tx.t("Sparmodus, alle 30 s (unterwegs ohne HUD)", "power-saving mode, every 30 s (riding without HUD)")
+                io.github.th3s1nc.osmandhudbridge.limit.GpsPolicy.Mode.IDLE -> Tx.t("Sparmodus, alle 5 min (Stand ohne HUD)", "power-saving mode, every 5 min (standing without HUD)")
             })
         } catch (e: Exception) {
             BridgeBus.gps = "GPS-Fehler: ${e.message}"
@@ -457,7 +460,7 @@ class BridgeService : Service(), HudClient.Listener {
         val sp = getSharedPreferences(PREFS, MODE_PRIVATE)
         val call = n.kind == io.github.th3s1nc.osmandhudbridge.nav.NoticeKind.CALL
         val enabled = sp.getBoolean(if (call) KEY_NOTICE_CALL else KEY_NOTICE_MSG, true)
-        if (!enabled && !n.clear) { BridgeBus.log("Meldung ignoriert: in den Einstellungen ausgeschaltet"); return }
+        if (!enabled && !n.clear) { BridgeBus.log(Tx.t("Meldung ignoriert: in den Einstellungen ausgeschaltet", "Message ignored: switched off in the settings")); return }
         controller.showNotice(call, n.name, n.clear)
     }
 
@@ -478,9 +481,9 @@ class BridgeService : Service(), HudClient.Listener {
         handler.postDelayed({
             if (io.github.th3s1nc.osmandhudbridge.nav.OsmAndNotificationListener.connected) return@postDelayed
             BridgeBus.log(
-                if (granted) "Warnung: Benachrichtigungszugriff ist erlaubt, aber nicht verbunden. Tempo, Restzeit und Ankunft aus OSMAnd fehlen. " +
-                    "In den Android-Einstellungen den Zugriff für diese App einmal aus- und wieder einschalten"
-                else "Hinweis: Benachrichtigungszugriff ist nicht erlaubt. Tempo, Restzeit und Ankunft aus OSMAnd fehlen"
+                if (granted) Tx.t("Warnung: Benachrichtigungszugriff ist erlaubt, aber nicht verbunden. Tempo, Restzeit und Ankunft aus OSMAnd fehlen. ", "Warning: notification access is allowed but not connected. Speed, remaining time and arrival from OSMAnd are missing. ") +
+                    Tx.t("In den Android-Einstellungen den Zugriff für diese App einmal aus- und wieder einschalten", "In the Android settings, switch access for this app off and on once")
+                else Tx.t("Hinweis: Benachrichtigungszugriff ist nicht erlaubt. Tempo, Restzeit und Ankunft aus OSMAnd fehlen", "Note: notification access is not allowed. Speed, remaining time and arrival from OSMAnd are missing")
             )
         }, 10_000)
     }
@@ -539,7 +542,7 @@ class BridgeService : Service(), HudClient.Listener {
         controller.setBrightness(if (sp.getBoolean(KEY_BRIGHT_AUTO, true)) -1 else sp.getInt(KEY_BRIGHT_STEP, 1).coerceIn(0, 2))
         if (!controller.setJustage(sp.getBoolean(KEY_JUSTAGE, false))) {
             sp.edit().putBoolean(KEY_JUSTAGE, false).apply() // HUD nicht verbunden: Schalter zurücksetzen
-            BridgeBus.log("Justage nur bei verbundenem HUD möglich")
+            BridgeBus.log(Tx.t("Justage nur bei verbundenem HUD möglich", "Alignment only possible with a connected HUD"))
         }
         val thr = sp.getString(KEY_THRESHOLD, null)
         controller.threshold = io.github.th3s1nc.osmandhudbridge.protocol.ThresholdMode.values()
@@ -564,7 +567,7 @@ class BridgeService : Service(), HudClient.Listener {
                     notifNavActive = false
                     if (meters != lastNavMeters || turn != lastNavTurn) {
                         lastNavMeters = meters; lastNavTurn = turn
-                        BridgeBus.log("OSMAnd: $meters m, Typ $turn -> ${OsmAndTurns.toHudCommand(turn) ?: "kein Pfeil"}")
+                        BridgeBus.log(Tx.t("OSMAnd: $meters m, Typ $turn -> ${OsmAndTurns.toHudCommand(turn) ?: "kein Pfeil"}", "OSMAnd: $meters m, type $turn -> ${OsmAndTurns.toHudCommand(turn) ?: "no arrow"}"))
                     }
                     controller.setNav(meters.coerceAtLeast(0), OsmAndTurns.toHudCommand(turn), extrapolate = true)
                 },
@@ -577,25 +580,25 @@ class BridgeService : Service(), HudClient.Listener {
                         if (unreachable) {
                             if (osmRetryCount == 0) {
                                 osmRetrySince = System.currentTimeMillis()
-                                BridgeBus.log("OSMAnd nicht erreichbar, die App versucht es alle 10 s weiter")
+                                BridgeBus.log(Tx.t("OSMAnd nicht erreichbar, die App versucht es alle 10 s weiter", "OSMAnd not reachable, the app keeps trying every 10 s"))
                             }
                             osmRetryCount++
                         }
                     } else {
                         if (osmRetryCount > 0) {
                             val mins = (System.currentTimeMillis() - osmRetrySince) / 60_000
-                            BridgeBus.log("OSMAnd: $osmRetryCount Verbindungsversuche in ${if (mins < 1) "unter 1" else mins.toString()} min")
+                            BridgeBus.log(Tx.t("OSMAnd: $osmRetryCount Verbindungsversuche in ${if (mins < 1) "unter 1" else mins.toString()} min", "OSMAnd: $osmRetryCount connection attempts in ${if (mins < 1) "under 1" else mins.toString()} min"))
                             osmRetryCount = 0
                         }
                         BridgeBus.log(it)
                     }
                 },
                 onArrived = {
-                    BridgeBus.log("Ziel erreicht -> Zielflagge")
+                    BridgeBus.log(Tx.t("Ziel erreicht -> Zielflagge", "Destination reached -> finish flag"))
                     controller.showGoal()
                 },
                 onVia = {
-                    BridgeBus.log("Zwischenziel erreicht -> VIA-Symbol")
+                    BridgeBus.log(Tx.t("Zwischenziel erreicht -> VIA-Symbol", "Waypoint reached -> VIA symbol"))
                     controller.showVia()
                 }
             ).also { it.start() }
@@ -615,7 +618,7 @@ class BridgeService : Service(), HudClient.Listener {
         val nm = getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(CHANNEL, "HUD-Verbindung", NotificationManager.IMPORTANCE_LOW)
+                NotificationChannel(CHANNEL, Tx.t("HUD-Verbindung", "HUD connection"), NotificationManager.IMPORTANCE_LOW)
             )
         }
     }
@@ -633,13 +636,13 @@ class BridgeService : Service(), HudClient.Listener {
             .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
             .setContentTitle("OSMAnd HUD Bridge")
             .setContentText(
-                if (TrackRecorder.active) "Aufzeichnung läuft" + (if (hudActive) " · " + BridgeBus.hud else "")
-                else if (hudActive) BridgeBus.hud else if (carMode) "Auto-Modus: Tempolimit, Straße und Töne ohne HUD" else "Läuft ohne HUD: Tempolimit und Straße, GPS im Sparmodus"
+                if (TrackRecorder.active) Tx.t("Aufzeichnung läuft", "Recording") + (if (hudActive) " · " + BridgeBus.hud else "")
+                else if (hudActive) BridgeBus.hud else if (carMode) Tx.t("Auto-Modus: Tempolimit, Straße und Töne ohne HUD", "Car mode: speed limit, street and tones without HUD") else Tx.t("Läuft ohne HUD: Tempolimit und Straße, GPS im Sparmodus", "Running without HUD: speed limit and street, GPS in power-saving mode")
             )
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(open)
-            .addAction(0, "Beenden", stop)
+            .addAction(0, Tx.t("Beenden", "Quit"), stop)
             .build()
     }
 

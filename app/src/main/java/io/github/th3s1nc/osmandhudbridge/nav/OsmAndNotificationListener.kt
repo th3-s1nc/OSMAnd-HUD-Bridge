@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import io.github.th3s1nc.osmandhudbridge.BridgeBus
 import io.github.th3s1nc.osmandhudbridge.BridgeService
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Liest die Navigations-Benachrichtigung von OSMAnd mit (Restweg, Restzeit, evtl. Ausfahrt).
@@ -19,7 +20,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
         connected = true
         instance = this
         BridgeBus.init(applicationContext)
-        BridgeBus.log("Benachrichtigungszugriff aktiv")
+        BridgeBus.log(Tx.t("Benachrichtigungszugriff aktiv", "Notification access active"))
         BridgeBus.changed()
         snapshot()
     }
@@ -27,7 +28,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
     override fun onListenerDisconnected() {
         connected = false
         instance = null
-        BridgeBus.log("Benachrichtigungszugriff getrennt")
+        BridgeBus.log(Tx.t("Benachrichtigungszugriff getrennt", "Notification access disconnected"))
         BridgeBus.changed()
     }
 
@@ -38,7 +39,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
             last = ""
             activeNotifications?.filter { it.packageName in OSMAND_PACKAGES }?.forEach { processOsmand(it) }
         } catch (e: Exception) {
-            BridgeBus.log("Vorhandene Benachrichtigungen nicht lesbar (${e.message})")
+            BridgeBus.log(Tx.t("Vorhandene Benachrichtigungen nicht lesbar (${e.message})", "Existing notifications not readable (${e.message})"))
         }
     }
 
@@ -61,7 +62,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
         val line = parts.joinToString(" | ")
         if (line.isEmpty() || line == last) return
         last = line
-        BridgeBus.log("OSMAnd-Notification (${n.id}): $line")
+        BridgeBus.log(Tx.t("OSMAnd-Notification (${n.id}): $line", "OSMAnd notification (${n.id}): $line"))
         val body = ArrayList<String>()
         e.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString()?.let { body += it.split('\n') }
         e.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.let { body += it.split('\n') }
@@ -77,20 +78,20 @@ class OsmAndNotificationListener : NotificationListenerService() {
     /** WhatsApp-Nachricht: nur Absender (Titel), Sammelmeldungen und Dauermeldungen werden übergangen. */
     private fun handleMessage(n: StatusBarNotification) {
         val no = n.notification
-        BridgeBus.log("WhatsApp-Meldung (${n.packageName}), Flags ${no.flags}, Kategorie ${no.category}")
-        if (no.flags and Notification.FLAG_GROUP_SUMMARY != 0) { BridgeBus.log("WhatsApp: Sammelmeldung übergangen"); return }
-        if (no.flags and Notification.FLAG_ONGOING_EVENT != 0) { BridgeBus.log("WhatsApp: Dauermeldung übergangen"); return }
+        BridgeBus.log(Tx.t("WhatsApp-Meldung (${n.packageName}), Flags ${no.flags}, Kategorie ${no.category}", "WhatsApp message (${n.packageName}), flags ${no.flags}, category ${no.category}"))
+        if (no.flags and Notification.FLAG_GROUP_SUMMARY != 0) { BridgeBus.log(Tx.t("WhatsApp: Sammelmeldung übergangen", "WhatsApp: group summary skipped")); return }
+        if (no.flags and Notification.FLAG_ONGOING_EVENT != 0) { BridgeBus.log(Tx.t("WhatsApp: Dauermeldung übergangen", "WhatsApp: ongoing notification skipped")); return }
         if (no.category == Notification.CATEGORY_CALL) { handleCall(n); return }
         val e = no.extras ?: return
         val title = e.getCharSequence(Notification.EXTRA_TITLE)?.toString()
         val text = e.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         val name = NoticeBus.cleanSender(title)
-        if (name == null) { BridgeBus.log("WhatsApp: Meldung ohne Titel übergangen"); return }
+        if (name == null) { BridgeBus.log(Tx.t("WhatsApp: Meldung ohne Titel übergangen", "WhatsApp: message without title skipped")); return }
         val sig = "$title|$text|${no.`when`}"
-        if (lastText[n.key] == sig) { BridgeBus.log("WhatsApp: doppelte Meldung übergangen"); return } // Neuveröffentlichung
+        if (lastText[n.key] == sig) { BridgeBus.log(Tx.t("WhatsApp: doppelte Meldung übergangen", "WhatsApp: duplicate message skipped")); return } // Neuveröffentlichung
         lastText[n.key] = sig
         if (lastText.size > 50) lastText.clear()
-        BridgeBus.log("Nachricht von $name (${n.packageName})")
+        BridgeBus.log(Tx.t("Nachricht von $name (${n.packageName})", "Message from $name (${n.packageName})"))
         NoticeBus.listener?.invoke(Notice(NoticeKind.MESSAGE, name))
     }
 
@@ -112,7 +113,7 @@ class OsmAndNotificationListener : NotificationListenerService() {
         if (callKey == n.key && name == lastCallName) return // Neuveröffentlichung derselben Anrufmeldung
         callKey = n.key
         lastCallName = name
-        BridgeBus.log("Eingehender Anruf (${n.packageName})")
+        BridgeBus.log(Tx.t("Eingehender Anruf (${n.packageName})", "Incoming call (${n.packageName})"))
         NoticeBus.listener?.invoke(Notice(NoticeKind.CALL, name))
     }
 

@@ -11,6 +11,7 @@ import androidx.appcompat.app.AlertDialog
 import io.github.th3s1nc.osmandhudbridge.protocol.DisplayMode
 import io.github.th3s1nc.osmandhudbridge.protocol.HudValue
 import io.github.th3s1nc.osmandhudbridge.protocol.SlotConfig
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /** Fenster "Felder wählen": je Zeile ein Auswahlfeld mit den Werten für Guide (2 Zeilen) bzw. Cruiser (4 Zeilen). */
 object FieldPickerDialog {
@@ -33,19 +34,19 @@ object FieldPickerDialog {
         }
         start.forEachIndexed { i, v ->
             box.addView(TextView(context).apply {
-                text = "Zeile ${i + 1}"
+                text = Tx.t("Zeile ${i + 1}", "Line ${i + 1}")
                 textSize = 12f
                 alpha = 0.7f
                 setPadding(0, (if (i == 0) 0 else 12 * dp).toInt(), 0, 0)
             })
             val sp = Spinner(context)
-            sp.adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, values.map { it.title })
+            sp.adapter = ArrayAdapter(context, android.R.layout.simple_spinner_dropdown_item, values.map { it.displayTitle })
             sp.setSelection(values.indexOf(v))
             spinners += sp
             box.addView(sp)
         }
         box.addView(TextView(context).apply {
-            text = "Fahrzeit und Strecke starten bei null, sobald du die Anzeige wählst."
+            text = Tx.t("Fahrzeit und Strecke starten bei null, sobald du die Anzeige wählst.", "Ride time and distance start at zero as soon as you choose the display.")
             textSize = 12f
             alpha = 0.7f
             setPadding(0, (16 * dp).toInt(), 0, (8 * dp).toInt())
@@ -57,11 +58,11 @@ object FieldPickerDialog {
         }
 
         AlertDialog.Builder(context)
-            .setTitle("Felder wählen")
+            .setTitle(Tx.t("Felder wählen", "Choose fields"))
             .setView(ScrollView(context).apply { addView(box) })
             .setPositiveButton("OK") { _, _ -> save(spinners.map { values[it.selectedItemPosition] }) }
-            .setNeutralButton("Standard") { _, _ -> save(SlotConfig.defaults(mode)) }
-            .setNegativeButton("Abbrechen", null)
+            .setNeutralButton(Tx.t("Standard", "Default")) { _, _ -> save(SlotConfig.defaults(mode)) }
+            .setNegativeButton(Tx.t("Abbrechen", "Cancel"), null)
             .show()
     }
 }

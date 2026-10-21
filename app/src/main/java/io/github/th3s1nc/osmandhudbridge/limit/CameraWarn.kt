@@ -75,7 +75,10 @@ class CameraWarn {
 
         /** Text unter dem Schieber: die echten Meter bei 50, 100 und 130 km/h. */
         fun leadHint(level: Int): String =
-            "Die Warnung kommt etwa ${leadMeters(50, level)} m vor dem Blitzer bei 50 km/h, ${leadMeters(100, level)} m bei 100 km/h und ${leadMeters(130, level)} m bei 130 km/h. Je schneller du fährst, desto früher."
+            Tx.t(
+                "Die Warnung kommt etwa ${leadMeters(50, level)} m vor dem Blitzer bei 50 km/h, ${leadMeters(100, level)} m bei 100 km/h und ${leadMeters(130, level)} m bei 130 km/h. Je schneller du fährst, desto früher.",
+                "The warning comes about ${leadMeters(50, level)} m before the camera at 50 km/h, ${leadMeters(100, level)} m at 100 km/h and ${leadMeters(130, level)} m at 130 km/h. The faster you drive, the earlier."
+            )
 
         private fun angleDiff(a: Double, b: Double): Double {
             var d = (a - b) % 360.0

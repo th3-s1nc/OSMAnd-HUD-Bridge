@@ -10,6 +10,7 @@ import java.util.ArrayDeque
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /** Status- und Logsammlung für die Oberfläche (und zum Weitergeben bei der Fehlersuche). */
 object BridgeBus {
@@ -68,7 +69,7 @@ object BridgeBus {
     /** Blitzer in den geladenen Kacheln (nur Test der Datenqualität). */
     @Volatile var cameras = "–"
     /** Blitzer in allen gespeicherten Kacheln (Hintergrundzählung der Oberfläche). */
-    @Volatile var camerasAll = "wird gezählt …"
+    @Volatile var camerasAll = Tx.t("wird gezählt …", "counting …")
     /** Ausführliches Protokoll: jede Wiederholung einzeln, nichts wird zusammengefasst. */
     @Volatile var verbose = false
     @Volatile var onChange: (() -> Unit)? = null

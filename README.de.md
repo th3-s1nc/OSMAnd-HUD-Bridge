@@ -30,7 +30,7 @@ Inoffizielle Android-App für den privaten Gebrauch. Sie steuert das Bluetooth-L
 - [OSMAnd](https://osmand.net) (Google Play, F-Droid "OSMAnd~" oder APK). In OSMAnd diese App unter *Verbundene Apps* freigeben (Menüname je nach Version).
 - Benachrichtigungszugriff für diese App (für OSMAnd, WhatsApp, Anrufe und Musiktitel)
 
-Vom Autor mit einem HUD auf einem Xiaomi 10T (LineageOS) getestet. Andere Geräte, Firmwarestände und Android-Versionen sind ungetestet.
+Vom Autor mit einem HUD auf einem Xiaomi Mi 10T (LineageOS) und einem Nubia Z80 Ultra (Original-Android) getestet. Andere Geräte, Firmwarestände und Android-Versionen sind ungetestet.
 
 **Sprache:** Die Oberfläche der App ist derzeit **nur auf Deutsch**. Das HUD selbst zeigt keine App-Texte, nur Symbole, Zahlen und Straßennamen. Eine englische Übersetzung ist geplant, Beiträge sind willkommen.
 

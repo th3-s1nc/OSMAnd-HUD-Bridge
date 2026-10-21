@@ -2,6 +2,35 @@
 
 (Deutsch. Die Versionsnummern bis 0.9.x gehören zur Entwicklung vor dem Paketwechsel.)
 
+## v0.11.95
+- **Fehler behoben:** In der englischen Anzeige standen noch deutsche Reste ("Sparmodus (ohne HUD)" bei GPS, "aus Import" und andere Herkunftsangaben der Kartenkacheln im Log). Die Statuszeilen werden jetzt vor dem Kürzen übersetzt, und die Log-Zeilen zu Kacheln, Blitzern, Hinweisen, Kurven und Abfragefehlern sind zweisprachig.
+- Nicht kompiliert getestet.
+
+## v0.11.94
+- **Englische Übersetzung, Etappe 3 (fertig):** Die Tabs Übersicht, Anzeige, Tracking und Info, die Fahrt-Seiten (Details, Karte), der Element-Test, "Felder wählen", Bluetooth-Dialoge, Texte zur Aufzeichnung und die Info-/Rechtstexte gibt es jetzt auch auf Englisch (Deutsch bleibt der Originaltext). Auch das Log und die Statuszeilen werden angezeigt in der gewählten Sprache; intern bleiben die deutschen Wörter, damit die Statusauswertung weiter funktioniert.
+- **Fehler behoben:** Nach dem Umschalten der Sprache bleibt die App auf der gleichen Seite, und die untere Leiste zeigt den passenden Reiter.
+- **Fehler behoben:** "Fertig: … Kacheln" und "Eingelesen am … aus …" (Straßendaten) werden in der gewählten Sprache angezeigt, auch für schon gespeicherte Importe.
+- Nicht kompiliert getestet.
+
+## v0.11.93
+- **Fehler behoben:** 0.11.92 ließ sich nicht bauen ("Unresolved reference 'github'" in BridgeBus.kt). Die Hilfsklasse für die Sprache wird dort jetzt normal importiert. Sonst keine Änderung.
+
+## v0.11.92
+- **Alle i-Knöpfe** öffnen die Erklärung jetzt in einem Fenster (wie "Stay awake"), mit dem Namen der Zeile als Titel. Vorher klappte der Text unter der Zeile auf.
+- **Englische Übersetzung, Etappe 2:** Texte, die das Programm zur Laufzeit setzt, sind jetzt zweisprachig: Live-Kachel (Tempo, Straße, Quelle des Limits), "Überschreitung", "Empfindlichkeit", "Warnabstand", Zahlen und Texte in "Gespeicherte Daten", Blitzer-Import, Region laden (Auswahl, Rückfragen, Fortschritt, Benachrichtigung), Import der Kartendatei (Schritte, Fehlermeldungen, Benachrichtigung), Saison (Monate, Datum), Dialoge, Hinweise und die Benachrichtigung des Dienstes. Neue kleine Hilfsklasse `Tx` dafür.
+- **Noch deutsch:** die Zeilen im Log (die App wertet einzelne Wörter daraus für Statusanzeigen aus, das wird getrennt umgebaut) sowie die Tabs Übersicht, Anzeige, Tracking und Info.
+- Nicht kompiliert getestet.
+
+## v0.11.91
+- **Englische Übersetzung, Etappe 1:** Die festen Texte der Tabs **Tempolimit** und **Werkzeuge** (Überschriften, Schalter, Erklärungen hinter dem i, Knöpfe) gibt es jetzt auf Englisch. Umschalten unter Werkzeuge → "Sprache / Language". Deutsch bleibt die Hauptsprache und die Rückfall-Sprache; die deutschen Texte sind unverändert, sie stehen jetzt in der Textdatei statt in der Bildschirm-Datei.
+- Noch deutsch: die übrigen Tabs, Meldungen und Rückfragen aus dem Programm (zum Beispiel Statuszeilen, Dialoge, Benachrichtigung). Das folgt in den nächsten Etappen.
+- Oberfläche nicht kompiliert getestet.
+
+## v0.11.90
+- **Neu: Sprachauswahl** (Tab Werkzeuge, Karte "Sprache / Language"): Automatisch (Handy-Sprache), Deutsch oder English. Die Wahl gilt sofort für die ganze App, auch für die Benachrichtigung des Dienstes (nach dem nächsten Start des Dienstes). Das ist die Grundlage für die englische Übersetzung; bisher ist nur diese Karte übersetzt, die übrigen Texte folgen in Etappen.
+- Technisch: neue Klasse für die Sprache, die App-Klasse setzt sie beim Start; Dienste bekommen einen Kontext mit der gewählten Sprache.
+- Oberfläche nicht kompiliert getestet.
+
 ## v0.11.89
 - **Fehler behoben:** Bei "Speicherplatz" stand dauerhaft "Belegt: –". Das Ergebnis der Zählung wird jetzt sofort angezeigt, bis dahin steht dort "wird berechnet …".
 - Hinweis: nicht kompiliert getestet.

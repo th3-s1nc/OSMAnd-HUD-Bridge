@@ -29,6 +29,7 @@
     </queries>
 
     <application
+        android:name=".HudApp"
         android:allowBackup="false"
         android:largeHeap="true"
         android:icon="@mipmap/ic_launcher"

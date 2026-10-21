@@ -9,6 +9,7 @@ import android.media.AudioTrack
 import android.os.Handler
 import kotlin.math.PI
 import kotlin.math.sin
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Warnton "dü-dü-dü" bei Tempoüberschreitung und vor Blitzern, ein einzelner höherer Ton für Hinweise (Bahnübergang, Zebrastreifen, Verkehrsberuhigung). Läuft wie eine Navigationsansage: Musik wird kurz leiser, der Ton geht
@@ -52,9 +53,9 @@ class SpeedBeeper(private val context: Context, private val handler: Handler) {
                 try { track.release() } catch (_: Exception) { }
                 try { am.abandonAudioFocusRequest(focus) } catch (_: Exception) { }
             }, durationMs + 300)
-            BridgeBus.log("Warnton gespielt")
+            BridgeBus.log(Tx.t("Warnton gespielt", "Warning tone played"))
         } catch (e: Exception) {
-            BridgeBus.log("Warnton nicht möglich (${e.message})")
+            BridgeBus.log(Tx.t("Warnton nicht möglich (${e.message})", "Warning tone not possible (${e.message})"))
         }
     }
 

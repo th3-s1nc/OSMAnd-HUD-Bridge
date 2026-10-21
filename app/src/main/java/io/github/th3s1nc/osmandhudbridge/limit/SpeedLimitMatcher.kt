@@ -104,7 +104,7 @@ class SignTracker(private val expireM: Double = 2_500.0) {
             used[s.id] = nowMs
             zone = if (entering) Zone.INNER else Zone.OUTER
             travelled = 0.0
-            return "Ortsschild ${s.tags["name"] ?: ""}: ${if (entering) "Eingang, innerorts" else "Ausgang, außerorts"}".replace("  ", " ")
+            return Tx.t("Ortsschild ${s.tags["name"] ?: ""}: ${if (entering) "Eingang, innerorts" else "Ausgang, außerorts"}", "Town sign ${s.tags["name"] ?: ""}: ${if (entering) "entering, built-up area" else "leaving, outside built-up area"}").replace("  ", " ")
         }
         return null
     }

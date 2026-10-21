@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import io.github.th3s1nc.osmandhudbridge.track.RideStore
 import io.github.th3s1nc.osmandhudbridge.track.RouteMapView
 import java.util.Locale
+import io.github.th3s1nc.osmandhudbridge.limit.Tx
 
 /**
  * Vollbild-Karte einer Fahrt: verschieben, zoomen (Plus/Minus, Doppeltipp, zwei Finger), einen Punkt der Route antippen
@@ -23,7 +24,7 @@ class RideMapActivity : AppCompatActivity() {
         val id = intent.getStringExtra(RideDetailActivity.EXTRA_ID)
         val points = id?.let { RideStore.points(this, it) } ?: emptyList()
         if (points.size < 2) {
-            Toast.makeText(this, "Keine Punkte gespeichert", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, Tx.t("Keine Punkte gespeichert", "No points saved"), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -58,15 +59,15 @@ class RideMapActivity : AppCompatActivity() {
             setTextColor(0xFFFFFFFF.toInt())
             setBackgroundResource(R.drawable.bg_map_btn)
             setPadding(dp(12), dp(8), dp(12), dp(8))
-            text = "Tippe auf die Route für Tempo und Höhe"
+            text = Tx.t("Tippe auf die Route für Tempo und Höhe", "Tap the route for speed and altitude")
         }
         root.addView(info, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
             setMargins(dp(12), dp(12), dp(12), dp(12))
         })
         fun show(i: Int) {
             val p = points[i]
-            val ele = p.ele?.let { String.format(Locale.GERMANY, " · Höhe %.0f m", it) } ?: ""
-            info.text = String.format(Locale.GERMANY, "Tempo %.0f km/h", p.speedKmh) + ele
+            val ele = p.ele?.let { String.format(Tx.loc(), Tx.t(" · Höhe %.0f m", " · altitude %.0f m"), it) } ?: ""
+            info.text = String.format(Tx.loc(), Tx.t("Tempo %.0f km/h", "Speed %.0f km/h"), p.speedKmh) + ele
         }
         map.onPick = { show(it) }
         val start = intent.getIntExtra(EXTRA_MARKER, -1)
